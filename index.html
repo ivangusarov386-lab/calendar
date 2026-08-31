@@ -3,28 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Календарь мероприятий</title>
+<title>Календарь класса 9Ц</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="page">
   <header class="cal-header">
-    <button id="cal-prev" class="nav-btn" aria-label="Предыдущий месяц">&#8592;</button>
-    <h1 id="cal-title">Загрузка…</h1>
-    <button id="cal-next" class="nav-btn" aria-label="Следующий месяц">&#8594;</button>
+    <div class="cal-brand">
+      <span class="class-badge">9<em>ц</em></span>
+      <div class="cal-brand__text">
+        <p class="cal-eyebrow">Календарь класса</p>
+        <p class="cal-subeyebrow">события, экскурсии, собрания</p>
+      </div>
+    </div>
+
+    <div class="cal-nav">
+      <button id="cal-prev" class="nav-btn" aria-label="Предыдущий месяц">&#8592;</button>
+      <h1 id="cal-title">Загрузка…</h1>
+      <button id="cal-next" class="nav-btn" aria-label="Следующий месяц">&#8594;</button>
+    </div>
   </header>
 
   <div id="cal-banner" class="cal-banner" hidden></div>
 
+  <div class="cal-weekdays" id="cal-weekdays"></div>
   <div id="cal-grid" class="cal-grid" role="grid" aria-busy="true"></div>
 
   <div id="cal-legend" class="cal-legend"></div>
+
+  <footer class="cal-footer">
+    <span class="cal-footer__dot"></span>
+    Данные обновляются напрямую из Google Таблицы при каждом открытии
+  </footer>
 </div>
 
 <div id="modal-overlay" class="modal-overlay" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-date">
     <button id="modal-close" class="modal-close" aria-label="Закрыть">&times;</button>
-    <h2 id="modal-date"></h2>
+    <p id="modal-date" class="modal-date"></p>
     <div id="modal-events"></div>
   </div>
 </div>

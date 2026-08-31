@@ -24,8 +24,8 @@ const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 // при первом появлении и остаётся стабильным до перезагрузки страницы —
 // точный список категорий и их цветов в ТЗ не зафиксирован (см. README, п.5).
 const PALETTE = [
-  '#4C6EF5', '#F59F00', '#12B886', '#E64980', '#7048E8',
-  '#15AABF', '#FA5252', '#82C91E', '#FD7E14', '#1098AD',
+  '#C1502E', '#3C5A80', '#B98900', '#4B6B53', '#7B5EA7',
+  '#2E7C74', '#A23E48', '#6B7C3B', '#3E8EA8', '#9C4F7A',
 ];
 const categoryColors = new Map();
 function colorForCategory(kind) {
@@ -160,27 +160,23 @@ function renderGrid(year, monthNum, monthKey, byDate) {
   els.grid.setAttribute('aria-busy', 'false');
   els.grid.innerHTML = '';
 
-  for (const wd of WEEKDAYS) {
-    const el = document.createElement('div');
-    el.className = 'cal-weekday';
-    el.textContent = wd;
-    els.grid.appendChild(el);
-  }
-
   const todayKey = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
   const cells = buildDayCells(year, monthNum);
-  for (const day of cells) {
+  cells.forEach((day, i) => {
+    const weekday = i % 7; // 0=Пн ... 5=Сб, 6=Вс
     if (day === null) {
       const empty = document.createElement('div');
       empty.className = 'cal-cell cal-cell--empty';
       els.grid.appendChild(empty);
-      continue;
+      return;
     }
 
     const key = formatDateKey(year, monthNum, day);
     const events = byDate.get(key) || [];
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
+    cell.style.animationDelay = `${Math.min(i, 20) * 12}ms`;
+    if (weekday === 5 || weekday === 6) cell.classList.add('is-weekend');
     if (key === todayKey) cell.classList.add('is-today');
 
     const num = document.createElement('div');
@@ -230,7 +226,7 @@ function renderGrid(year, monthNum, monthKey, byDate) {
     }
 
     els.grid.appendChild(cell);
-  }
+  });
 }
 
 function renderLegend(byDate) {
@@ -260,6 +256,8 @@ function openModal(dateKey, events) {
   for (const e of events) {
     const card = document.createElement('div');
     card.className = 'event-card';
+
+    card.style.setProperty('--event-accent', colorForCategory(e.kind));
 
     const badge = document.createElement('span');
     badge.className = 'event-kind';
@@ -310,6 +308,7 @@ function closeModal() {
 function init() {
   els.title = document.getElementById('cal-title');
   els.grid = document.getElementById('cal-grid');
+  els.weekdays = document.getElementById('cal-weekdays');
   els.banner = document.getElementById('cal-banner');
   els.legend = document.getElementById('cal-legend');
   els.prevBtn = document.getElementById('cal-prev');
@@ -318,6 +317,13 @@ function init() {
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
   els.modalClose = document.getElementById('modal-close');
+
+  for (const wd of WEEKDAYS) {
+    const el = document.createElement('div');
+    el.className = 'cal-weekday';
+    el.textContent = wd;
+    els.weekdays.appendChild(el);
+  }
 
   const idx = todayIndexInOrder();
   state.orderIndex = idx >= 0 ? idx : 0;
