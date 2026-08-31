@@ -144,15 +144,21 @@ async function loadAndRender() {
     return;
   }
 
-  const byDate = groupRowsByDate(rows);
-  let year = guessYearForMonth(monthKey, new Date());
-  const firstKey = byDate.keys().next().value;
-  if (firstKey) {
-    const parts = firstKey.split('.');
-    if (parts.length === 3 && parts[2]) year = Number(parts[2]);
+  try {
+    const byDate = groupRowsByDate(rows);
+    let year = guessYearForMonth(monthKey, new Date());
+    const firstKey = byDate.keys().next().value;
+    if (firstKey) {
+      const parts = firstKey.split('.');
+      if (parts.length === 3 && parts[2]) year = Number(parts[2]);
+    }
+    renderGrid(year, MONTH_NUM[monthKey], monthKey, byDate);
+    renderLegend(byDate);
+  } catch (err) {
+    els.banner.hidden = false;
+    els.banner.textContent = 'Не удалось обработать данные из таблицы. Проверьте формат колонок на листе.';
+    renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
   }
-  renderGrid(year, MONTH_NUM[monthKey], monthKey, byDate);
-  renderLegend(byDate);
 }
 
 function renderGrid(year, monthNum, monthKey, byDate) {
@@ -348,4 +354,23 @@ function init() {
   loadAndRender();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+function showFatalError() {
+  const title = document.getElementById('cal-title');
+  const banner = document.getElementById('cal-banner');
+  if (title) title.textContent = 'Ошибка загрузки';
+  if (banner) {
+    banner.hidden = false;
+    banner.textContent = 'Не удалось загрузить календарь. Попробуйте обновить страницу.';
+  }
+}
+
+window.addEventListener('error', showFatalError);
+window.addEventListener('unhandledrejection', showFatalError);
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    init();
+  } catch (err) {
+    showFatalError();
+  }
+});
