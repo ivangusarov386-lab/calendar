@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Календарь мероприятий</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="page">
+  <header class="cal-header">
+    <button id="cal-prev" class="nav-btn" aria-label="Предыдущий месяц">&#8592;</button>
+    <h1 id="cal-title">Загрузка…</h1>
+    <button id="cal-next" class="nav-btn" aria-label="Следующий месяц">&#8594;</button>
+  </header>
+
+  <div id="cal-banner" class="cal-banner" hidden></div>
+
+  <div id="cal-grid" class="cal-grid" role="grid" aria-busy="true"></div>
+
+  <div id="cal-legend" class="cal-legend"></div>
+</div>
+
+<div id="modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-date">
+    <button id="modal-close" class="modal-close" aria-label="Закрыть">&times;</button>
+    <h2 id="modal-date"></h2>
+    <div id="modal-events"></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
