@@ -4,5 +4,5 @@
 // самой Google Таблице: Расширения → Apps Script → Развернуть → Новое
 // развёртывание → тип "Веб-приложение" → скопировать ссылку.
 const CALENDAR_CONFIG = {
-  webAppUrl: 'https://script.google.com/macros/s/AKfycbxr73y0-W53bSOYHWKpY35zzgkMoKA-1APDyjzWYc8CmtYJrYp-crLzpH4-pCg9Ed61/exec',
+  webAppUrl: 'https://script.google.com/macros/s/AKfycbxI8ZQU-skCN2dR7bZt_4iV9uc-l3SjTkXN5qPGLSn6igFaiacbjAoDdDB_eU6f69Tk/exec',
 };
