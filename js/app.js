@@ -20,20 +20,33 @@ const MONTH_NUM = {
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-// Палитра цветов для «Вида мероприятия». Цвет закрепляется за категорией
-// при первом появлении и остаётся стабильным до перезагрузки страницы —
-// точный список категорий и их цветов в ТЗ не зафиксирован (см. README, п.5).
-const PALETTE = [
-  '#3D6FE0', '#D2691E', '#2E9E6B', '#B8388A', '#7B5EA7',
-  '#1AA6B7', '#C23B4C', '#8C9A2E', '#E0A100', '#4C5FD6',
+// Закреплённые цвета для известных категорий «Вид мероприятия» — тот же
+// список (по написанию), что и EVENT_KINDS в apps-script/Code.gs, где он
+// используется для выпадающего списка на листе. Держите оба списка в
+// синхроне: правите категории в таблице — обновите и цвета здесь.
+const CATEGORY_COLOR_MAP = {
+  'Собрание': '#3D6FE0',
+  'Экскурсия': '#D2691E',
+  'Праздник': '#E0A100',
+  'Кружок': '#2E9E6B',
+  'Другое': '#7B5EA7',
+};
+
+// Резервная палитра — для категорий, которых нет в CATEGORY_COLOR_MAP
+// (например, вписанных вручную мимо выпадающего списка). Цвет закрепляется
+// за такой категорией при первом появлении и остаётся стабильным до
+// перезагрузки страницы.
+const FALLBACK_PALETTE = [
+  '#1AA6B7', '#C23B4C', '#8C9A2E', '#B8388A', '#4C5FD6',
 ];
-const categoryColors = new Map();
+const fallbackCategoryColors = new Map();
 function colorForCategory(kind) {
   if (!kind) return '#868E96';
-  if (!categoryColors.has(kind)) {
-    categoryColors.set(kind, PALETTE[categoryColors.size % PALETTE.length]);
+  if (CATEGORY_COLOR_MAP[kind]) return CATEGORY_COLOR_MAP[kind];
+  if (!fallbackCategoryColors.has(kind)) {
+    fallbackCategoryColors.set(kind, FALLBACK_PALETTE[fallbackCategoryColors.size % FALLBACK_PALETTE.length]);
   }
-  return categoryColors.get(kind);
+  return fallbackCategoryColors.get(kind);
 }
 
 function todayIndexInOrder() {
