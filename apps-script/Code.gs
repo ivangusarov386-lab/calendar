@@ -7,6 +7,10 @@
  * 3. Обновить страницу таблицы — в меню появится пункт «Календарь».
  * 4. При первом запуске любого пункта меню Google попросит авторизовать
  *    скрипт (доступ только к этой таблице) — это нормально, разрешить.
+ *
+ * Этот же файл отдаёт данные календаря сайту (функция doGet ниже) — см.
+ * раздел «Публикация Web App» в README.md для инструкции по развёртыванию.
+ * Так сайт читает таблицу без Google Cloud Console и без API-ключа.
  */
 
 const MONTH_NAMES_RU = [
@@ -23,6 +27,30 @@ const HEADERS = ['Дата', 'Время', 'Вид мероприятия', 'М�
 const EVENT_KINDS = ['Собрание', 'Экскурсия', 'Праздник', 'Кружок', 'Другое'];
 
 const PARTICIPATION_VALUES = ['Да', 'Нет'];
+
+// Сайт обращается сюда: GET {URL развёртывания}?month=сентябрь
+// Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
+// видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
+// даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
+// Если лист с таким названием ещё не создан — { rows: null }.
+function doGet(e) {
+  const month = ((e && e.parameter && e.parameter.month) || '').trim().toLowerCase();
+  const result = { rows: null };
+
+  if (MONTH_NAMES_RU.indexOf(month) === -1) {
+    result.error = 'unknown_month';
+  } else {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(month);
+    if (sheet) {
+      const lastRow = sheet.getLastRow();
+      result.rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getDisplayValues();
+    }
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
 function onOpen() {
   SpreadsheetApp.getUi()

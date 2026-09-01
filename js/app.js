@@ -72,16 +72,17 @@ function formatDateKey(year, monthNum, day) {
   return `${dd}.${mm}.${year}`;
 }
 
+// Данные читаются из Apps Script Web App (apps-script/Code.gs, функция
+// doGet), развёрнутого прямо из самой таблицы — без Google Cloud Console
+// и без API-ключа (см. README.md, раздел "Публикация Web App").
 async function fetchMonthRows(sheetName) {
-  const range = `${encodeURIComponent(sheetName)}!A2:F1000`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CALENDAR_CONFIG.spreadsheetId}/values/${range}?key=${CALENDAR_CONFIG.apiKey}`;
+  const url = `${CALENDAR_CONFIG.webAppUrl}?month=${encodeURIComponent(sheetName)}`;
   const res = await fetch(url);
   if (!res.ok) {
-    if (res.status === 400 || res.status === 404) return null; // лист ещё не создан
-    throw new Error(`Google Sheets API: ${res.status}`);
+    throw new Error(`Apps Script Web App: ${res.status}`);
   }
   const json = await res.json();
-  return json.values || [];
+  return json.rows; // null, если лист с этим названием ещё не создан
 }
 
 // Строки существуют на каждый день месяца заранее — мероприятие определяем
@@ -123,7 +124,7 @@ const state = {
 const els = {};
 
 function isConfigured() {
-  return CALENDAR_CONFIG.apiKey && !CALENDAR_CONFIG.apiKey.startsWith('ВСТАВЬТЕ');
+  return CALENDAR_CONFIG.webAppUrl && !CALENDAR_CONFIG.webAppUrl.startsWith('ВСТАВЬТЕ');
 }
 
 async function loadAndRender() {
@@ -135,7 +136,7 @@ async function loadAndRender() {
 
   if (!isConfigured()) {
     els.banner.hidden = false;
-    els.banner.textContent = 'API-ключ Google Sheets не настроен. Откройте js/config.js и укажите ключ (см. README.md).';
+    els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
     renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
     return;
   }
