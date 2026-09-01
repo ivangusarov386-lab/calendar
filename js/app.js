@@ -75,8 +75,8 @@ function formatDateKey(year, monthNum, day) {
 // Данные читаются из Apps Script Web App (apps-script/Code.gs, функция
 // doGet), развёрнутого прямо из самой таблицы — без Google Cloud Console
 // и без API-ключа (см. README.md, раздел "Публикация Web App").
-async function fetchMonthRows(sheetName) {
-  const url = `${CALENDAR_CONFIG.webAppUrl}?month=${encodeURIComponent(sheetName)}`;
+async function fetchMonthRows(monthNum) {
+  const url = `${CALENDAR_CONFIG.webAppUrl}?month=${monthNum}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Apps Script Web App: ${res.status}`);
@@ -143,7 +143,7 @@ async function loadAndRender() {
 
   let rows;
   try {
-    rows = await fetchMonthRows(monthKey);
+    rows = await fetchMonthRows(MONTH_NUM[monthKey]);
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';

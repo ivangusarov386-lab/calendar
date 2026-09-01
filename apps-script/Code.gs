@@ -28,19 +28,23 @@ const EVENT_KINDS = ['Собрание', 'Экскурсия', 'Праздник
 
 const PARTICIPATION_VALUES = ['Да', 'Нет'];
 
-// Сайт обращается сюда: GET {URL развёртывания}?month=сентябрь
+// Сайт обращается сюда: GET {URL развёртывания}?month=9 (номер месяца, 1-12).
+// Номер, а не русское название — google-редирект script.google.com →
+// script.googleusercontent.com иногда портит кириллицу в query-параметрах,
+// с цифрами такой проблемы нет.
 // Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
 // видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
 // даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
 // Если лист с таким названием ещё не создан — { rows: null }.
 function doGet(e) {
-  const month = ((e && e.parameter && e.parameter.month) || '').trim().toLowerCase();
+  const monthNum = parseInt((e && e.parameter && e.parameter.month) || '', 10);
   const result = { rows: null };
 
-  if (MONTH_NAMES_RU.indexOf(month) === -1) {
+  if (!(monthNum >= 1 && monthNum <= 12)) {
     result.error = 'unknown_month';
   } else {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(month);
+    const sheetName = MONTH_NAMES_RU[monthNum - 1];
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (sheet) {
       const lastRow = sheet.getLastRow();
       result.rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getDisplayValues();
