@@ -13,6 +13,17 @@
  * Так сайт читает таблицу без Google Cloud Console и без API-ключа.
  */
 
+// ID вашей таблицы (из её ссылки: .../spreadsheets/d/ЭТОТ_КУСОК/edit).
+// Указан явно, а не через SpreadsheetApp.getActiveSpreadsheet() — так
+// doGet() гарантированно работает с нужной таблицей независимо от того,
+// как именно был создан скрипт (привязан к таблице через «Расширения»
+// или как отдельный проект на script.google.com).
+const SPREADSHEET_ID = '1NdaeHr4sUdYV0B6v8FSI-66SeFGXyCOpP2QeKI2E668';
+
+function getCalendarSpreadsheet() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
 const MONTH_NAMES_RU = [
   'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
   'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
@@ -44,7 +55,7 @@ function doGet(e) {
     result.error = 'unknown_month';
   } else {
     const sheetName = MONTH_NAMES_RU[monthNum - 1];
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    const sheet = getCalendarSpreadsheet().getSheetByName(sheetName);
     if (sheet) {
       const lastRow = sheet.getLastRow();
       result.rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getDisplayValues();
@@ -87,7 +98,7 @@ function createMonthSheetDialog() {
 }
 
 function createMonthSheet(monthNum, year) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getCalendarSpreadsheet();
   const sheetName = MONTH_NAMES_RU[monthNum - 1];
 
   if (ss.getSheetByName(sheetName)) {
@@ -121,7 +132,7 @@ function createMonthSheet(monthNum, year) {
 }
 
 function applyValidationToActiveSheet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const sheet = getCalendarSpreadsheet().getActiveSheet();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     SpreadsheetApp.getUi().alert('На листе нет строк с данными (кроме заголовка).');
