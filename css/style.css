@@ -338,12 +338,10 @@ body::after {
   outline-offset: 2px;
 }
 
-.cal-cell.participation-yes { background: var(--green-bg); }
-.cal-cell.participation-no { background: var(--red-bg); }
-.cal-cell.participation-mixed {
-  background: linear-gradient(135deg, var(--green-bg) 0%, var(--green-bg) 48%, var(--red-bg) 52%, var(--red-bg) 100%);
-}
-
+/* Фон ячейки с мероприятием красится инлайн-стилем в JS (цвет самой
+   категории «Вид мероприятия» — см. applyEventsToGrid в js/app.js).
+   Точки в углу — те же цвета, для точной идентификации, если категорий
+   в этот день несколько (тогда фон делится на полосы по диагонали). */
 .cal-dots {
   position: absolute;
   top: 10px;
@@ -358,6 +356,24 @@ body::after {
   display: inline-block;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
 }
+
+/* «Участие» (Да/Нет) — компактные точки снизу слева, отдельно от цвета
+   категории, который теперь занимает фон ячейки. */
+.cal-participation {
+  position: absolute;
+  bottom: 8px;
+  left: 9px;
+  display: flex;
+  gap: 3px;
+}
+.cal-participation-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+.cal-participation-dot--yes { background: #2F9E56; }
+.cal-participation-dot--no { background: #D64545; }
 
 .cal-count {
   position: absolute;
