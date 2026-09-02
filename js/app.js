@@ -123,6 +123,13 @@ const state = {
 
 const els = {};
 
+// Кэш ответов Apps Script на время открытой вкладки: monthNum -> rows
+// (массив) или null («лист не создан»). Повторное открытие уже
+// загруженного в этом сеансе месяца берёт данные отсюда, без нового
+// запроса — переключение назад-вперёд становится мгновенным. При
+// перезагрузке страницы кэш пуст, так что данные снова свежие «как есть».
+const monthDataCache = new Map();
+
 function isConfigured() {
   return CALENDAR_CONFIG.webAppUrl && !CALENDAR_CONFIG.webAppUrl.startsWith('ВСТАВЬТЕ');
 }
@@ -130,7 +137,8 @@ function isConfigured() {
 // Сетку рисуем сразу, не дожидаясь ответа сети — числа месяца меняются
 // мгновенно по клику; события/подсветка донакладываются следующим шагом,
 // когда данные придут (см. applyEventsToGrid). Так переключение месяца не
-// выглядит подвисанием, даже если Apps Script отвечает не сразу.
+// выглядит подвисанием, даже если Apps Script отвечает не сразу (у него
+// всегда есть задержка на "холодный старт" в несколько секунд).
 async function loadAndRender() {
   const monthKey = MONTHS_ORDER[state.orderIndex];
   const monthNum = MONTH_NUM[monthKey];
@@ -147,23 +155,33 @@ async function loadAndRender() {
   }
 
   let rows;
-  try {
-    rows = await fetchMonthRows(monthNum);
-  } catch (err) {
-    els.banner.hidden = false;
-    els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
-    return;
+  if (monthDataCache.has(monthNum)) {
+    rows = monthDataCache.get(monthNum);
+  } else {
+    els.grid.classList.add('is-loading');
+    try {
+      rows = await fetchMonthRows(monthNum);
+    } catch (err) {
+      els.grid.classList.remove('is-loading');
+      if (MONTHS_ORDER[state.orderIndex] === monthKey) {
+        els.banner.hidden = false;
+        els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
+      }
+      return;
+    }
+    els.grid.classList.remove('is-loading');
+    monthDataCache.set(monthNum, rows);
   }
+
+  // Если пользователь успел переключить месяц, пока шёл этот запрос —
+  // не накладываем устаревший ответ поверх уже другой отрисованной сетки.
+  if (MONTHS_ORDER[state.orderIndex] !== monthKey) return;
 
   if (rows === null) {
     els.banner.hidden = false;
     els.banner.textContent = `Лист «${monthKey}» ещё не заполнен.`;
     return;
   }
-
-  // Если пользователь успел переключить месяц, пока шёл этот запрос —
-  // не накладываем устаревший ответ поверх уже другой отрисованной сетки.
-  if (MONTHS_ORDER[state.orderIndex] !== monthKey) return;
 
   try {
     const byDate = groupRowsByDate(rows);
