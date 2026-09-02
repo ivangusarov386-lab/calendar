@@ -127,55 +127,62 @@ function isConfigured() {
   return CALENDAR_CONFIG.webAppUrl && !CALENDAR_CONFIG.webAppUrl.startsWith('ВСТАВЬТЕ');
 }
 
+// Сетку рисуем сразу, не дожидаясь ответа сети — числа месяца меняются
+// мгновенно по клику; события/подсветка донакладываются следующим шагом,
+// когда данные придут (см. applyEventsToGrid). Так переключение месяца не
+// выглядит подвисанием, даже если Apps Script отвечает не сразу.
 async function loadAndRender() {
   const monthKey = MONTHS_ORDER[state.orderIndex];
-  els.title.textContent = `${MONTH_TITLE[monthKey]} …`;
-  els.grid.setAttribute('aria-busy', 'true');
+  const monthNum = MONTH_NUM[monthKey];
+  const guessedYear = guessYearForMonth(monthKey, new Date());
+
   els.banner.hidden = true;
   els.legend.innerHTML = '';
+  renderGridSkeleton(guessedYear, monthNum, monthKey);
 
   if (!isConfigured()) {
     els.banner.hidden = false;
     els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
-    renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
     return;
   }
 
   let rows;
   try {
-    rows = await fetchMonthRows(MONTH_NUM[monthKey]);
+    rows = await fetchMonthRows(monthNum);
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
-    renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
     return;
   }
 
   if (rows === null) {
     els.banner.hidden = false;
     els.banner.textContent = `Лист «${monthKey}» ещё не заполнен.`;
-    renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
     return;
   }
 
+  // Если пользователь успел переключить месяц, пока шёл этот запрос —
+  // не накладываем устаревший ответ поверх уже другой отрисованной сетки.
+  if (MONTHS_ORDER[state.orderIndex] !== monthKey) return;
+
   try {
     const byDate = groupRowsByDate(rows);
-    let year = guessYearForMonth(monthKey, new Date());
+    let year = guessedYear;
     const firstKey = byDate.keys().next().value;
     if (firstKey) {
       const parts = firstKey.split('.');
       if (parts.length === 3 && parts[2]) year = Number(parts[2]);
     }
-    renderGrid(year, MONTH_NUM[monthKey], monthKey, byDate);
+    if (year !== guessedYear) renderGridSkeleton(year, monthNum, monthKey);
+    applyEventsToGrid(byDate);
     renderLegend(byDate);
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось обработать данные из таблицы. Проверьте формат колонок на листе.';
-    renderGrid(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey], monthKey, new Map());
   }
 }
 
-function renderGrid(year, monthNum, monthKey, byDate) {
+function renderGridSkeleton(year, monthNum, monthKey) {
   els.title.textContent = `${MONTH_TITLE[monthKey]} ${year}`;
   els.grid.setAttribute('aria-busy', 'false');
   els.grid.innerHTML = '';
@@ -192,9 +199,9 @@ function renderGrid(year, monthNum, monthKey, byDate) {
     }
 
     const key = formatDateKey(year, monthNum, day);
-    const events = byDate.get(key) || [];
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
+    cell.dataset.date = key;
     cell.style.animationDelay = `${Math.min(i, 20) * 12}ms`;
     if (weekday === 5 || weekday === 6) cell.classList.add('is-weekend');
     if (key === todayKey) cell.classList.add('is-today');
@@ -204,49 +211,57 @@ function renderGrid(year, monthNum, monthKey, byDate) {
     num.textContent = day;
     cell.appendChild(num);
 
-    if (events.length) {
-      cell.classList.add('has-event');
-
-      const hasDa = events.some((e) => e.participation === 'Да');
-      const hasNet = events.some((e) => e.participation === 'Нет');
-      if (hasDa && hasNet) cell.classList.add('participation-mixed');
-      else if (hasDa) cell.classList.add('participation-yes');
-      else if (hasNet) cell.classList.add('participation-no');
-
-      const dots = document.createElement('div');
-      dots.className = 'cal-dots';
-      const seen = new Set();
-      for (const e of events) {
-        if (e.kind && !seen.has(e.kind)) {
-          seen.add(e.kind);
-          const dot = document.createElement('span');
-          dot.className = 'cal-dot';
-          dot.style.background = colorForCategory(e.kind);
-          dots.appendChild(dot);
-        }
-      }
-      cell.appendChild(dots);
-
-      if (events.length > 1) {
-        const count = document.createElement('span');
-        count.className = 'cal-count';
-        count.textContent = String(events.length);
-        cell.appendChild(count);
-      }
-
-      cell.tabIndex = 0;
-      cell.setAttribute('role', 'button');
-      cell.addEventListener('click', () => openModal(key, events));
-      cell.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openModal(key, events);
-        }
-      });
-    }
-
     els.grid.appendChild(cell);
   });
+}
+
+// Донакладывает мероприятия на уже отрисованные ячейки (без перестройки
+// сетки и повторной анимации появления — только сами ячейки с событиями).
+function applyEventsToGrid(byDate) {
+  for (const [key, events] of byDate.entries()) {
+    if (!events.length) continue;
+    const cell = els.grid.querySelector(`[data-date="${key}"]`);
+    if (!cell) continue;
+
+    cell.classList.add('has-event');
+
+    const hasDa = events.some((e) => e.participation === 'Да');
+    const hasNet = events.some((e) => e.participation === 'Нет');
+    if (hasDa && hasNet) cell.classList.add('participation-mixed');
+    else if (hasDa) cell.classList.add('participation-yes');
+    else if (hasNet) cell.classList.add('participation-no');
+
+    const dots = document.createElement('div');
+    dots.className = 'cal-dots';
+    const seen = new Set();
+    for (const e of events) {
+      if (e.kind && !seen.has(e.kind)) {
+        seen.add(e.kind);
+        const dot = document.createElement('span');
+        dot.className = 'cal-dot';
+        dot.style.background = colorForCategory(e.kind);
+        dots.appendChild(dot);
+      }
+    }
+    cell.appendChild(dots);
+
+    if (events.length > 1) {
+      const count = document.createElement('span');
+      count.className = 'cal-count';
+      count.textContent = String(events.length);
+      cell.appendChild(count);
+    }
+
+    cell.tabIndex = 0;
+    cell.setAttribute('role', 'button');
+    cell.addEventListener('click', () => openModal(key, events));
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openModal(key, events);
+      }
+    });
+  }
 }
 
 function renderLegend(byDate) {
