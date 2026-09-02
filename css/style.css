@@ -288,11 +288,12 @@ body::after {
 }
 
 .cal-cell.is-today {
-  border-color: var(--accent-strong);
-  box-shadow: inset 0 0 0 1.5px var(--accent-strong), 0 0 0 4px rgba(91, 147, 255, 0.14);
+  background: #FFF3B8;
+  border-color: #D6A400;
+  box-shadow: inset 0 0 0 1.5px #D6A400, 0 0 0 4px rgba(214, 164, 0, 0.18);
 }
 .cal-cell.is-today .cal-daynum {
-  color: var(--accent-strong);
+  color: #7A5900;
 }
 .cal-cell.is-today .cal-daynum::after {
   content: '';
@@ -300,7 +301,7 @@ body::after {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent-strong);
+  background: #D6A400;
   margin-left: 5px;
   vertical-align: middle;
 }
