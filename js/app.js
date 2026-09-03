@@ -13,6 +13,13 @@ const MONTH_TITLE = {
   'сентябрь': 'Сентябрь', 'октябрь': 'Октябрь', 'ноябрь': 'Ноябрь', 'декабрь': 'Декабрь',
 };
 
+// Родительный падеж — для дат в списке ("1 сентября", а не "1 Сентябрь").
+const MONTH_GENITIVE = {
+  'январь': 'января', 'февраль': 'февраля', 'март': 'марта', 'апрель': 'апреля',
+  'май': 'мая', 'июнь': 'июня', 'июль': 'июля', 'август': 'августа',
+  'сентябрь': 'сентября', 'октябрь': 'октября', 'ноябрь': 'ноября', 'декабрь': 'декабря',
+};
+
 const MONTH_NUM = {
   'январь': 1, 'февраль': 2, 'март': 3, 'апрель': 4, 'май': 5, 'июнь': 6,
   'июль': 7, 'август': 8, 'сентябрь': 9, 'октябрь': 10, 'ноябрь': 11, 'декабрь': 12,
@@ -131,6 +138,7 @@ function buildDayCells(year, monthNum) {
 
 const state = {
   orderIndex: 0,
+  view: 'grid', // 'grid' | 'list'
 };
 
 const els = {};
@@ -159,10 +167,12 @@ async function loadAndRender() {
   els.banner.hidden = true;
   els.legend.innerHTML = '';
   renderGridSkeleton(guessedYear, monthNum, monthKey);
+  renderListPlaceholder('Загрузка…');
 
   if (!isConfigured()) {
     els.banner.hidden = false;
     els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
+    renderListPlaceholder('');
     return;
   }
 
@@ -170,18 +180,19 @@ async function loadAndRender() {
   if (monthDataCache.has(monthNum)) {
     rows = monthDataCache.get(monthNum);
   } else {
-    els.grid.classList.add('is-loading');
+    setLoading(true);
     try {
       rows = await fetchMonthRows(monthNum);
     } catch (err) {
-      els.grid.classList.remove('is-loading');
+      setLoading(false);
       if (MONTHS_ORDER[state.orderIndex] === monthKey) {
         els.banner.hidden = false;
         els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
+        renderListPlaceholder('');
       }
       return;
     }
-    els.grid.classList.remove('is-loading');
+    setLoading(false);
     monthDataCache.set(monthNum, rows);
   }
 
@@ -192,6 +203,7 @@ async function loadAndRender() {
   if (rows === null) {
     els.banner.hidden = false;
     els.banner.textContent = `Лист «${monthKey}» ещё не заполнен.`;
+    renderListPlaceholder('');
     return;
   }
 
@@ -206,10 +218,17 @@ async function loadAndRender() {
     if (year !== guessedYear) renderGridSkeleton(year, monthNum, monthKey);
     applyEventsToGrid(byDate);
     renderLegend(byDate);
+    renderListView(byDate, year, monthNum, monthKey);
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось обработать данные из таблицы. Проверьте формат колонок на листе.';
+    renderListPlaceholder('');
   }
+}
+
+function setLoading(isLoading) {
+  els.grid.classList.toggle('is-loading', isLoading);
+  els.list.classList.toggle('is-loading', isLoading);
 }
 
 function renderGridSkeleton(year, monthNum, monthKey) {
@@ -320,6 +339,107 @@ function applyEventsToGrid(byDate) {
   }
 }
 
+function renderListPlaceholder(message) {
+  els.list.innerHTML = '';
+  if (!message) return;
+  const p = document.createElement('p');
+  p.className = 'list-empty';
+  p.textContent = message;
+  els.list.appendChild(p);
+}
+
+// Список — та же неделя/дни месяца, что и сетка, но показывает только дни
+// с мероприятиями, построчно с временем/названием/категорией/участием.
+// Полный адрес — по клику на строку, открывает ту же модалку, что и сетка.
+function renderListView(byDate, year, monthNum, monthKey) {
+  els.list.innerHTML = '';
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const todayKey = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  let any = false;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = formatDateKey(year, monthNum, day);
+    const events = byDate.get(key);
+    if (!events || !events.length) continue;
+    any = true;
+
+    const group = document.createElement('div');
+    group.className = 'list-day';
+    if (key === todayKey) group.classList.add('is-today');
+
+    const header = document.createElement('div');
+    header.className = 'list-day__header';
+    const weekday = WEEKDAYS[(new Date(year, monthNum - 1, day).getDay() + 6) % 7];
+    header.textContent = `${weekday}, ${day} ${MONTH_GENITIVE[monthKey]}`;
+    if (key === todayKey) {
+      const badge = document.createElement('span');
+      badge.className = 'list-day__badge';
+      badge.textContent = 'Сегодня';
+      header.appendChild(badge);
+    }
+    group.appendChild(header);
+
+    const eventsWrap = document.createElement('div');
+    eventsWrap.className = 'list-day__events';
+    for (const e of events) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'list-event';
+      row.style.setProperty('--event-accent', colorForCategory(e.kind));
+
+      const time = document.createElement('span');
+      time.className = 'list-event__time';
+      time.textContent = e.time || '—';
+      row.appendChild(time);
+
+      const title = document.createElement('span');
+      title.className = 'list-event__title';
+      title.textContent = e.title;
+      row.appendChild(title);
+
+      if (e.kind) {
+        const kind = document.createElement('span');
+        kind.className = 'list-event__kind';
+        kind.textContent = e.kind;
+        kind.style.background = colorForCategory(e.kind);
+        row.appendChild(kind);
+      }
+
+      if (e.participation === 'Да' || e.participation === 'Нет') {
+        const p = document.createElement('span');
+        p.className = `list-event__participation ${e.participation === 'Да' ? 'yes' : 'no'}`;
+        p.textContent = e.participation;
+        row.appendChild(p);
+      }
+
+      row.addEventListener('click', () => openModal(key, events));
+      eventsWrap.appendChild(row);
+    }
+    group.appendChild(eventsWrap);
+    els.list.appendChild(group);
+  }
+
+  if (!any) {
+    const empty = document.createElement('p');
+    empty.className = 'list-empty';
+    empty.textContent = 'В этом месяце пока нет мероприятий.';
+    els.list.appendChild(empty);
+  }
+}
+
+function switchView(view) {
+  state.view = view;
+  try { localStorage.setItem('calendarView', view); } catch (err) { /* приватный режим — не критично */ }
+
+  els.panel.hidden = view !== 'grid';
+  els.list.hidden = view !== 'list';
+
+  els.viewGridBtn.classList.toggle('is-active', view === 'grid');
+  els.viewGridBtn.setAttribute('aria-selected', String(view === 'grid'));
+  els.viewListBtn.classList.toggle('is-active', view === 'list');
+  els.viewListBtn.setAttribute('aria-selected', String(view === 'list'));
+}
+
 function renderLegend(byDate) {
   const kinds = new Set();
   for (const events of byDate.values()) {
@@ -398,12 +518,16 @@ function closeModal() {
 
 function init() {
   els.title = document.getElementById('cal-title');
+  els.panel = document.getElementById('cal-panel');
   els.grid = document.getElementById('cal-grid');
+  els.list = document.getElementById('cal-list');
   els.weekdays = document.getElementById('cal-weekdays');
   els.banner = document.getElementById('cal-banner');
   els.legend = document.getElementById('cal-legend');
   els.prevBtn = document.getElementById('cal-prev');
   els.nextBtn = document.getElementById('cal-next');
+  els.viewGridBtn = document.getElementById('view-grid-btn');
+  els.viewListBtn = document.getElementById('view-list-btn');
   els.modalOverlay = document.getElementById('modal-overlay');
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
@@ -418,6 +542,13 @@ function init() {
 
   const idx = todayIndexInOrder();
   state.orderIndex = idx >= 0 ? idx : 0;
+
+  let savedView = 'grid';
+  try { savedView = localStorage.getItem('calendarView') || 'grid'; } catch (err) { /* приватный режим — не критично */ }
+  switchView(savedView === 'list' ? 'list' : 'grid');
+
+  els.viewGridBtn.addEventListener('click', () => switchView('grid'));
+  els.viewListBtn.addEventListener('click', () => switchView('list'));
 
   els.prevBtn.addEventListener('click', () => {
     state.orderIndex = (state.orderIndex - 1 + MONTHS_ORDER.length) % MONTHS_ORDER.length;

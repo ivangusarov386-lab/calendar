@@ -215,6 +215,37 @@ body::after {
 }
 .nav-btn:active { transform: scale(0.92); }
 
+/* ---------- View switch (Сетка / Список) ---------- */
+
+.view-switch {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 18px auto 0;
+  padding: 4px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+.view-switch__btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 7px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.view-switch__btn:hover { color: var(--ink); }
+.view-switch__btn.is-active {
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #fff;
+}
+
 /* ---------- Banner ---------- */
 
 .cal-banner {
@@ -275,6 +306,114 @@ body::after {
 @keyframes cellIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- List view (Список) ---------- */
+
+/* Guarded by :not([hidden]) rather than an unconditional `display` on
+   .cal-list itself — an unconditional display here would override the
+   browser's default [hidden] { display: none } the same way it once did
+   for .modal-overlay, permanently showing/blocking the panel. */
+.cal-list:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cal-list.is-loading { animation: gridPulse 1.1s ease-in-out infinite; }
+
+.list-day {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.list-day.is-today {
+  border-color: #D6A400;
+  box-shadow: inset 0 0 0 1.5px #D6A400;
+}
+.list-day__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink-dark);
+  margin-bottom: 8px;
+}
+.list-day__badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7A5900;
+  background: #FFF3B8;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.list-day__events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.list-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-left: 3px solid var(--event-accent, var(--accent));
+  background: #fbfbfd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink-dark);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.list-event:hover { background: #f1f2f8; transform: translateX(2px); }
+.list-event:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.list-event__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--ink-dark-muted);
+  min-width: 42px;
+  flex-shrink: 0;
+}
+.list-event__title {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-event__kind {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.list-event__participation {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.list-event__participation.yes { color: var(--green-ink); }
+.list-event__participation.no { color: var(--red-ink); }
+
+.list-empty {
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  padding: 24px 0;
+  margin: 0;
 }
 
 .cal-cell {
@@ -549,4 +688,7 @@ body::after {
   .cal-nav { gap: 12px; }
   .cal-count { font-size: 0.6rem; }
   .modal-card { padding: 24px 20px; }
+  .list-event { flex-wrap: wrap; }
+  .list-event__title { flex-basis: 100%; white-space: normal; order: 3; }
+  .view-switch__btn { padding: 6px 15px; font-size: 0.75rem; }
 }
