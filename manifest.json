@@ -1,0 +1,17 @@
+{
+  "name": "Календарь класса 9Ц",
+  "short_name": "9Ц Календарь",
+  "description": "Календарь мероприятий класса 9Ц: собрания, экскурсии, праздники",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050a1c",
+  "theme_color": "#0b1638",
+  "lang": "ru",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

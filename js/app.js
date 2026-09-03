@@ -590,3 +590,12 @@ document.addEventListener('DOMContentLoaded', () => {
     showFatalError();
   }
 });
+
+// Регистрация service worker — нужна браузеру, чтобы предложить
+// "Добавить на экран" (без неё PWA не считается устанавливаемым).
+// Сам service worker не кэширует данные календаря (см. sw.js).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* не критично */ });
+  });
+}
