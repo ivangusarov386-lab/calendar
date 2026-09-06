@@ -27,6 +27,10 @@ const MONTH_NUM = {
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// Расписание уроков — те же названия дней, что в apps-script/Code.gs
+// (SCHEDULE_WEEKDAYS_RU), лист «расписание».
+const SCHEDULE_WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+
 // Закреплённые цвета для известных категорий «Вид мероприятия» — тот же
 // список (по написанию), что и EVENT_KINDS в apps-script/Code.gs, где он
 // используется для выпадающего списка на листе. Держите оба списка в
@@ -104,6 +108,17 @@ async function fetchMonthRows(monthNum) {
   return json.rows; // null, если лист с этим названием ещё не создан
 }
 
+// Расписание — GET {webAppUrl}?schedule=1, лист «расписание» (apps-script/Code.gs).
+async function fetchScheduleRows() {
+  const url = `${CALENDAR_CONFIG.webAppUrl}?schedule=1`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Apps Script Web App: ${res.status}`);
+  }
+  const json = await res.json();
+  return json.rows; // null, если лист «расписание» ещё не создан
+}
+
 // Строки существуют на каждый день месяца заранее — мероприятие определяем
 // по непустому полю "Мероприятие", а не по факту существования строки (см. ТЗ п.2).
 function groupRowsByDate(rows) {
@@ -139,6 +154,7 @@ function buildDayCells(year, monthNum) {
 const state = {
   orderIndex: 0,
   view: 'grid', // 'grid' | 'list'
+  section: 'events', // 'events' | 'schedule'
 };
 
 const els = {};
@@ -229,6 +245,165 @@ async function loadAndRender() {
 function setLoading(isLoading) {
   els.grid.classList.toggle('is-loading', isLoading);
   els.list.classList.toggle('is-loading', isLoading);
+  els.schedulePanel.classList.toggle('is-loading', isLoading);
+}
+
+// Расписание не привязано к месяцу — грузится один раз за сеанс (лениво,
+// при первом переключении на вкладку «Расписание») и дальше берётся из
+// scheduleCache, как и мероприятия из monthDataCache.
+let scheduleCache = null;
+let scheduleLoaded = false;
+
+async function loadSchedule() {
+  if (scheduleLoaded) {
+    renderSchedule(scheduleCache);
+    return;
+  }
+
+  els.banner.hidden = true;
+  renderSchedulePlaceholder('Загрузка…');
+
+  if (!isConfigured()) {
+    els.banner.hidden = false;
+    els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
+    renderSchedulePlaceholder('');
+    return;
+  }
+
+  setLoading(true);
+  let rows;
+  try {
+    rows = await fetchScheduleRows();
+  } catch (err) {
+    setLoading(false);
+    els.banner.hidden = false;
+    els.banner.textContent = 'Не удалось загрузить расписание. Попробуйте обновить страницу.';
+    renderSchedulePlaceholder('');
+    return;
+  }
+  setLoading(false);
+
+  if (rows === null) {
+    els.banner.hidden = false;
+    els.banner.textContent = 'Лист «расписание» ещё не создан (меню «Календарь → Создать лист расписания» в таблице).';
+    renderSchedulePlaceholder('');
+    return;
+  }
+
+  scheduleCache = rows;
+  scheduleLoaded = true;
+  renderSchedule(rows);
+}
+
+function renderSchedulePlaceholder(message) {
+  els.schedulePanel.innerHTML = '';
+  if (!message) return;
+  const p = document.createElement('p');
+  p.className = 'list-empty';
+  p.textContent = message;
+  els.schedulePanel.appendChild(p);
+}
+
+function renderSchedule(rows) {
+  els.schedulePanel.innerHTML = '';
+
+  const byDay = new Map();
+  for (const row of rows) {
+    const [day, num, time, subject, room, teacher] = row;
+    if (!day || !subject || !subject.trim()) continue;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push({
+      num: parseInt(num, 10) || 0,
+      time: (time || '').trim(),
+      subject: subject.trim(),
+      room: (room || '').trim(),
+      teacher: (teacher || '').trim(),
+    });
+  }
+
+  let any = false;
+  for (const day of SCHEDULE_WEEKDAYS) {
+    const lessons = byDay.get(day);
+    if (!lessons || !lessons.length) continue;
+    any = true;
+    lessons.sort((a, b) => a.num - b.num);
+
+    const group = document.createElement('div');
+    group.className = 'list-day';
+
+    const header = document.createElement('div');
+    header.className = 'list-day__header';
+    header.textContent = day;
+    group.appendChild(header);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'list-day__events';
+    for (const l of lessons) {
+      const row = document.createElement('div');
+      row.className = 'lesson-row';
+
+      const num = document.createElement('span');
+      num.className = 'lesson-row__num';
+      num.textContent = l.num || '·';
+      row.appendChild(num);
+
+      const main = document.createElement('div');
+      main.className = 'lesson-row__main';
+
+      const top = document.createElement('div');
+      top.className = 'lesson-row__top';
+      const subj = document.createElement('span');
+      subj.className = 'lesson-row__subject';
+      subj.textContent = l.subject;
+      top.appendChild(subj);
+      if (l.time) {
+        const time = document.createElement('span');
+        time.className = 'lesson-row__time';
+        time.textContent = l.time;
+        top.appendChild(time);
+      }
+      main.appendChild(top);
+
+      const metaParts = [l.room ? `Каб. ${l.room}` : '', l.teacher].filter(Boolean);
+      if (metaParts.length) {
+        const meta = document.createElement('div');
+        meta.className = 'lesson-row__meta';
+        meta.textContent = metaParts.join(' · ');
+        main.appendChild(meta);
+      }
+      row.appendChild(main);
+      wrap.appendChild(row);
+    }
+    group.appendChild(wrap);
+    els.schedulePanel.appendChild(group);
+  }
+
+  if (!any) {
+    renderSchedulePlaceholder('Расписание пока не заполнено.');
+  }
+}
+
+function switchSection(section) {
+  state.section = section;
+  try { localStorage.setItem('calendarSection', section); } catch (err) { /* приватный режим — не критично */ }
+
+  const isEvents = section === 'events';
+
+  els.sectionEventsBtn.classList.toggle('is-active', isEvents);
+  els.sectionEventsBtn.setAttribute('aria-selected', String(isEvents));
+  els.sectionScheduleBtn.classList.toggle('is-active', !isEvents);
+  els.sectionScheduleBtn.setAttribute('aria-selected', String(!isEvents));
+
+  els.nav.hidden = !isEvents;
+  els.eventsViewSwitch.hidden = !isEvents;
+  els.legend.hidden = !isEvents;
+  els.panel.hidden = !(isEvents && state.view === 'grid');
+  els.list.hidden = !(isEvents && state.view === 'list');
+  els.schedulePanel.hidden = isEvents;
+
+  els.banner.hidden = true;
+
+  if (!isEvents) loadSchedule();
 }
 
 function renderGridSkeleton(year, monthNum, monthKey) {
@@ -431,8 +606,12 @@ function switchView(view) {
   state.view = view;
   try { localStorage.setItem('calendarView', view); } catch (err) { /* приватный режим — не критично */ }
 
-  els.panel.hidden = view !== 'grid';
-  els.list.hidden = view !== 'list';
+  // Сетку/список показываем, только пока активен раздел «Мероприятия» —
+  // переключатель видов всё равно скрыт в «Расписании», но защищаемся и
+  // здесь на случай программного вызова.
+  const isEvents = state.section === 'events';
+  els.panel.hidden = !(isEvents && view === 'grid');
+  els.list.hidden = !(isEvents && view === 'list');
 
   els.viewGridBtn.classList.toggle('is-active', view === 'grid');
   els.viewGridBtn.setAttribute('aria-selected', String(view === 'grid'));
@@ -518,16 +697,21 @@ function closeModal() {
 
 function init() {
   els.title = document.getElementById('cal-title');
+  els.nav = document.getElementById('cal-nav');
   els.panel = document.getElementById('cal-panel');
   els.grid = document.getElementById('cal-grid');
   els.list = document.getElementById('cal-list');
+  els.schedulePanel = document.getElementById('schedule-panel');
   els.weekdays = document.getElementById('cal-weekdays');
   els.banner = document.getElementById('cal-banner');
   els.legend = document.getElementById('cal-legend');
   els.prevBtn = document.getElementById('cal-prev');
   els.nextBtn = document.getElementById('cal-next');
+  els.eventsViewSwitch = document.getElementById('events-view-switch');
   els.viewGridBtn = document.getElementById('view-grid-btn');
   els.viewListBtn = document.getElementById('view-list-btn');
+  els.sectionEventsBtn = document.getElementById('section-events-btn');
+  els.sectionScheduleBtn = document.getElementById('section-schedule-btn');
   els.modalOverlay = document.getElementById('modal-overlay');
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
@@ -543,10 +727,17 @@ function init() {
   const idx = todayIndexInOrder();
   state.orderIndex = idx >= 0 ? idx : 0;
 
+  let savedSection = 'events';
+  try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
+  state.section = savedSection === 'schedule' ? 'schedule' : 'events';
+
   let savedView = 'grid';
   try { savedView = localStorage.getItem('calendarView') || 'grid'; } catch (err) { /* приватный режим — не критично */ }
   switchView(savedView === 'list' ? 'list' : 'grid');
+  switchSection(state.section);
 
+  els.sectionEventsBtn.addEventListener('click', () => switchSection('events'));
+  els.sectionScheduleBtn.addEventListener('click', () => switchSection('schedule'));
   els.viewGridBtn.addEventListener('click', () => switchView('grid'));
   els.viewListBtn.addEventListener('click', () => switchView('list'));
 

@@ -18,7 +18,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 <!-- Шрифты подключены неблокирующе (preload + swap), чтобы медленная загрузка
      Google Fonts не задерживала выполнение скриптов ниже по странице. -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital@1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -76,13 +76,18 @@
     <p class="cal-subeyebrow">события · экскурсии · собрания</p>
    </div>
 
-    <div class="cal-nav">
+    <div class="view-switch" id="section-switch" role="tablist" aria-label="Раздел">
+      <button type="button" id="section-events-btn" class="view-switch__btn is-active" role="tab" aria-selected="true" data-section="events">Мероприятия</button>
+      <button type="button" id="section-schedule-btn" class="view-switch__btn" role="tab" aria-selected="false" data-section="schedule">Расписание</button>
+    </div>
+
+    <div class="cal-nav" id="cal-nav">
       <button id="cal-prev" class="nav-btn" aria-label="Предыдущий месяц">&#8592;</button>
       <h1 id="cal-title">Загрузка…</h1>
       <button id="cal-next" class="nav-btn" aria-label="Следующий месяц">&#8594;</button>
     </div>
 
-    <div class="view-switch" role="tablist" aria-label="Вид календаря">
+    <div class="view-switch" id="events-view-switch" role="tablist" aria-label="Вид календаря">
       <button type="button" id="view-grid-btn" class="view-switch__btn" role="tab" aria-selected="true" data-view="grid">Сетка</button>
       <button type="button" id="view-list-btn" class="view-switch__btn" role="tab" aria-selected="false" data-view="list">Список</button>
     </div>
@@ -99,6 +104,8 @@
 
   <div id="cal-legend" class="cal-legend"></div>
 
+  <div class="cal-panel schedule-panel" id="schedule-panel" hidden></div>
+
   <footer class="cal-footer">
     <span class="cal-footer__dot"></span>
     Данные обновляются напрямую из Google Таблицы при каждом открытии
@@ -113,7 +120,7 @@
   </div>
 </div>
 
-<script src="js/config.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/config.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

@@ -39,16 +39,37 @@ const EVENT_KINDS = ['Собрание', 'Экскурсия', 'Праздник
 
 const PARTICIPATION_VALUES = ['Да', 'Нет'];
 
-// Сайт обращается сюда: GET {URL развёртывания}?month=9 (номер месяца, 1-12).
-// Номер, а не русское название — google-редирект script.google.com →
-// script.googleusercontent.com иногда портит кириллицу в query-параметрах,
-// с цифрами такой проблемы нет.
+// Расписание уроков — отдельный лист в этой же таблице (не отдельная
+// таблица): тот же Web App и то же меню, без второго набора прав/ссылок.
+// В отличие от «Мероприятий» строка тут не про конкретную дату, а про
+// день недели + номер урока — расписание одно и то же каждую неделю.
+const SCHEDULE_SHEET_NAME = 'расписание';
+const SCHEDULE_HEADERS = ['День недели', '№ урока', 'Время', 'Предмет', 'Кабинет', 'Учитель'];
+const SCHEDULE_WEEKDAYS_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+const SCHEDULE_LESSONS_PER_DAY = 7; // пустые (без «Предмет») строки сайт просто не покажет
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Сайт обращается сюда двумя способами:
+// - GET {URL}?month=9 (номер месяца, 1-12) — мероприятия. Номер, а не
+//   русское название — google-редирект script.google.com →
+//   script.googleusercontent.com иногда портит кириллицу в query-параметрах,
+//   с цифрами такой проблемы нет.
+// - GET {URL}?schedule=1 — расписание уроков.
 // Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
 // видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
 // даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
-// Если лист с таким названием ещё не создан — { rows: null }.
+// Если нужный лист ещё не создан — { rows: null }.
 function doGet(e) {
-  const monthNum = parseInt((e && e.parameter && e.parameter.month) || '', 10);
+  const params = (e && e.parameter) || {};
+
+  if (params.schedule) {
+    return jsonResponse(getScheduleRows());
+  }
+
+  const monthNum = parseInt(params.month || '', 10);
   const result = { rows: null };
 
   if (!(monthNum >= 1 && monthNum <= 12)) {
@@ -62,9 +83,15 @@ function doGet(e) {
     }
   }
 
-  return ContentService
-    .createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
+  return jsonResponse(result);
+}
+
+function getScheduleRows() {
+  const sheet = getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
+  if (!sheet) return { rows: null };
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SCHEDULE_HEADERS.length).getDisplayValues();
+  return { rows };
 }
 
 function onOpen() {
@@ -72,7 +99,42 @@ function onOpen() {
     .createMenu('Календарь')
     .addItem('Добавить лист на месяц…', 'createMonthSheetDialog')
     .addItem('Настроить проверку данных на текущем листе', 'applyValidationToActiveSheet')
+    .addSeparator()
+    .addItem('Создать лист расписания', 'createScheduleSheet')
     .addToUi();
+}
+
+function createScheduleSheet() {
+  const ss = getCalendarSpreadsheet();
+  if (ss.getSheetByName(SCHEDULE_SHEET_NAME)) {
+    SpreadsheetApp.getUi().alert(`Лист «${SCHEDULE_SHEET_NAME}» уже существует.`);
+    return;
+  }
+
+  const sheet = ss.insertSheet(SCHEDULE_SHEET_NAME);
+  sheet.getRange(1, 1, 1, SCHEDULE_HEADERS.length).setValues([SCHEDULE_HEADERS]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  const rows = [];
+  for (const day of SCHEDULE_WEEKDAYS_RU) {
+    for (let lesson = 1; lesson <= SCHEDULE_LESSONS_PER_DAY; lesson++) {
+      rows.push([day, lesson, '', '', '', '']);
+    }
+  }
+  sheet.getRange(2, 1, rows.length, SCHEDULE_HEADERS.length).setValues(rows);
+
+  sheet.setColumnWidth(1, 120);
+  sheet.setColumnWidth(2, 70);
+  sheet.setColumnWidth(3, 110);
+  sheet.setColumnWidth(4, 160);
+  sheet.setColumnWidth(5, 90);
+  sheet.setColumnWidth(6, 160);
+
+  SpreadsheetApp.getUi().alert(
+    `Лист «${SCHEDULE_SHEET_NAME}» создан: ${SCHEDULE_WEEKDAYS_RU.length} дней × ${SCHEDULE_LESSONS_PER_DAY} уроков.\n\n` +
+    'Заполните «Предмет» (и по желанию «Время»/«Кабинет»/«Учитель») только для реальных уроков — ' +
+    'строки с пустым «Предмет» сайт просто не покажет, лишние можно не трогать.'
+  );
 }
 
 function createMonthSheetDialog() {

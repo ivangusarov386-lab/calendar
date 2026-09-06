@@ -174,7 +174,10 @@ body::after {
   font-family: var(--font-display);
 }
 
-.cal-nav {
+/* :not([hidden]) — не unconditional display, потому что теперь этот блок
+   скрывается в разделе «Расписание»; unconditional display здесь повторил
+   бы баг, который раньше блокировал все клики через .modal-overlay. */
+.cal-nav:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -215,9 +218,13 @@ body::after {
 }
 .nav-btn:active { transform: scale(0.92); }
 
-/* ---------- View switch (Сетка / Список) ---------- */
+/* ---------- View switch (используется и для "Мероприятия/Расписание",
+   и для "Сетка/Список" — тот же компонент, разные кнопки внутри) ---------- */
 
-.view-switch {
+/* :not([hidden]) — см. комментарий у .cal-nav выше: этот блок теперь
+   тоже скрывается (переключатель Сетка/Список нужен только в разделе
+   «Мероприятия»), unconditional display сломал бы скрытие. */
+.view-switch:not([hidden]) {
   display: flex;
   justify-content: center;
   gap: 4px;
@@ -320,6 +327,7 @@ body::after {
   gap: 12px;
 }
 .cal-list.is-loading { animation: gridPulse 1.1s ease-in-out infinite; }
+.schedule-panel.is-loading { animation: gridPulse 1.1s ease-in-out infinite; }
 
 .list-day {
   background: var(--surface);
@@ -414,6 +422,61 @@ body::after {
   font-size: 0.9rem;
   padding: 24px 0;
   margin: 0;
+}
+
+/* ---------- Schedule (Расписание) — переиспользует .list-day/.cal-panel ---------- */
+
+.schedule-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lesson-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-left: 3px solid var(--accent);
+  background: #fbfbfd;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.lesson-row__num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--border-soft);
+  color: var(--ink-dark-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.lesson-row__main { flex: 1; min-width: 0; }
+.lesson-row__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lesson-row__subject {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-dark);
+}
+.lesson-row__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  color: var(--ink-dark-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.lesson-row__meta {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--ink-dark-muted);
 }
 
 .cal-cell {
@@ -526,7 +589,9 @@ body::after {
 
 /* ---------- Legend ---------- */
 
-.cal-legend {
+/* :not([hidden]) — см. комментарий у .cal-nav: легенда категорий теперь
+   тоже скрывается в разделе «Расписание». */
+.cal-legend:not([hidden]) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
@@ -691,4 +756,5 @@ body::after {
   .list-event { flex-wrap: wrap; }
   .list-event__title { flex-basis: 100%; white-space: normal; order: 3; }
   .view-switch__btn { padding: 6px 15px; font-size: 0.75rem; }
+  .lesson-row__top { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
