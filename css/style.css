@@ -237,6 +237,7 @@ body::after {
   backdrop-filter: blur(8px);
 }
 .view-switch__btn {
+  position: relative;
   border: none;
   background: transparent;
   color: var(--ink-soft);
@@ -251,6 +252,21 @@ body::after {
 .view-switch__btn.is-active {
   background: linear-gradient(155deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: #fff;
+}
+
+/* Красная точка «есть непросмотренные обновления» на кнопке раздела. */
+.update-dot {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #E23B3B;
+  box-shadow: 0 0 0 2px var(--glass-bg);
+}
+.view-switch__btn.is-active .update-dot {
+  box-shadow: 0 0 0 2px var(--accent-strong);
 }
 
 /* ---------- Banner ---------- */
@@ -358,6 +374,13 @@ body::after {
   background: #FFF3B8;
   padding: 2px 8px;
   border-radius: 999px;
+}
+.list-day__update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #E23B3B;
+  flex-shrink: 0;
 }
 .list-day__events {
   display: flex;
@@ -556,6 +579,21 @@ body::after {
   height: 7px;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
+/* Красная точка «новое/изменилось с прошлого раза, когда вы это видели» —
+   сравнение хранится в localStorage браузера (см. js/app.js), поэтому это
+   именно «на этом устройстве», а не общее для всех. Пропадает по клику на
+   день (открытие карточки мероприятия = «посмотрел»). */
+.cal-update-dot {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #E23B3B;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
 }
 

@@ -140,6 +140,78 @@ function groupRowsByDate(rows) {
   return byDate;
 }
 
+// «Есть обновления» отслеживается локально в браузере (localStorage) —
+// у сайта нет сервера/базы, так что это именно «на этом устройстве», а не
+// общее для всех, кто открывает сайт. При первом знакомстве с датой (её
+// раньше не было в сохранённом снимке) baseline устанавливается тихо, без
+// пометки — иначе при самом первом визите подсветились бы вообще все дни.
+// Дата помечается «непросмотренной», только если её содержимое реально
+// отличается от того, что было сохранено с прошлого раза; метка снимается,
+// когда пользователь открывает карточку дня (см. openModal → acknowledgeDateSeen).
+const SEEN_SIGNATURES_KEY = 'calendarSeenEventSignatures';
+const UNSEEN_DATES_KEY = 'calendarUnseenDates';
+
+function eventsSignature(events) {
+  return JSON.stringify(events.map((e) => [e.time, e.kind, e.title, e.address, e.participation]));
+}
+
+function loadJsonFromStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function saveJsonToStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (err) { /* приватный режим — не критично */ }
+}
+
+// Сравнивает byDate с сохранённым снимком, обновляет снимок и множество
+// непросмотренных дат, возвращает те даты ИЗ ЭТОГО месяца, что сейчас
+// непросмотрены (для подсветки в сетке/списке).
+function diffAndTrackUpdates(byDate) {
+  const signatures = loadJsonFromStorage(SEEN_SIGNATURES_KEY, {});
+  const unseen = new Set(loadJsonFromStorage(UNSEEN_DATES_KEY, []));
+
+  for (const [key, events] of byDate.entries()) {
+    const sig = eventsSignature(events);
+    if (!(key in signatures)) {
+      signatures[key] = sig; // впервые видим эту дату — просто база для сравнения
+    } else if (signatures[key] !== sig) {
+      signatures[key] = sig;
+      unseen.add(key);
+    }
+  }
+
+  saveJsonToStorage(SEEN_SIGNATURES_KEY, signatures);
+  saveJsonToStorage(UNSEEN_DATES_KEY, [...unseen]);
+  updateEventsBadge(unseen);
+
+  return unseen;
+}
+
+function updateEventsBadge(unseen) {
+  const set = unseen || new Set(loadJsonFromStorage(UNSEEN_DATES_KEY, []));
+  if (els.eventsUpdateDot) els.eventsUpdateDot.hidden = set.size === 0;
+}
+
+// Вызывается при открытии карточки дня — «посмотрел», точка для этой даты
+// больше не показывается (пока содержимое снова не изменится).
+function acknowledgeDateSeen(dateKey) {
+  const unseen = new Set(loadJsonFromStorage(UNSEEN_DATES_KEY, []));
+  if (!unseen.has(dateKey)) return;
+  unseen.delete(dateKey);
+  saveJsonToStorage(UNSEEN_DATES_KEY, [...unseen]);
+  updateEventsBadge(unseen);
+
+  const cell = els.grid.querySelector(`[data-date="${dateKey}"] .cal-update-dot`);
+  if (cell) cell.remove();
+  const listDot = els.list.querySelector(`[data-update-date="${dateKey}"]`);
+  if (listDot) listDot.remove();
+}
+
 function buildDayCells(year, monthNum) {
   const daysInMonth = new Date(year, monthNum, 0).getDate();
   let startWeekday = new Date(year, monthNum - 1, 1).getDay(); // 0=Вс
@@ -233,9 +305,10 @@ async function loadAndRender() {
       if (parts.length === 3 && parts[2]) year = Number(parts[2]);
     }
     if (year !== guessedYear) renderGridSkeleton(year, monthNum, monthKey);
-    applyEventsToGrid(byDate);
+    const unseen = diffAndTrackUpdates(byDate);
+    applyEventsToGrid(byDate, unseen);
     renderLegend(byDate);
-    renderListView(byDate, year, monthNum, monthKey);
+    renderListView(byDate, year, monthNum, monthKey, unseen);
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось обработать данные из таблицы. Проверьте формат колонок на листе.';
@@ -447,13 +520,19 @@ function renderGridSkeleton(year, monthNum, monthKey) {
 
 // Донакладывает мероприятия на уже отрисованные ячейки (без перестройки
 // сетки и повторной анимации появления — только сами ячейки с событиями).
-function applyEventsToGrid(byDate) {
+function applyEventsToGrid(byDate, unseen) {
   for (const [key, events] of byDate.entries()) {
     if (!events.length) continue;
     const cell = els.grid.querySelector(`[data-date="${key}"]`);
     if (!cell) continue;
 
     cell.classList.add('has-event');
+
+    if (unseen && unseen.has(key)) {
+      const updateDot = document.createElement('span');
+      updateDot.className = 'cal-update-dot';
+      cell.appendChild(updateDot);
+    }
 
     // Фон ячейки красится цветом категории «Вид мероприятия» — если за
     // день несколько разных категорий, фон делится на равные диагональные
@@ -532,7 +611,7 @@ function renderListPlaceholder(message) {
 // Список — та же неделя/дни месяца, что и сетка, но показывает только дни
 // с мероприятиями, построчно с временем/названием/категорией/участием.
 // Полный адрес — по клику на строку, открывает ту же модалку, что и сетка.
-function renderListView(byDate, year, monthNum, monthKey) {
+function renderListView(byDate, year, monthNum, monthKey, unseen) {
   els.list.innerHTML = '';
   const daysInMonth = new Date(year, monthNum, 0).getDate();
   const todayKey = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
@@ -552,6 +631,12 @@ function renderListView(byDate, year, monthNum, monthKey) {
     header.className = 'list-day__header';
     const weekday = WEEKDAYS[(new Date(year, monthNum - 1, day).getDay() + 6) % 7];
     header.textContent = `${weekday}, ${day} ${MONTH_GENITIVE[monthKey]}`;
+    if (unseen && unseen.has(key)) {
+      const dot = document.createElement('span');
+      dot.className = 'list-day__update-dot';
+      dot.dataset.updateDate = key;
+      header.appendChild(dot);
+    }
     if (key === todayKey) {
       const badge = document.createElement('span');
       badge.className = 'list-day__badge';
@@ -646,6 +731,8 @@ function renderLegend(byDate) {
 }
 
 function openModal(dateKey, events) {
+  acknowledgeDateSeen(dateKey);
+
   els.modalDate.textContent = dateKey;
   els.modalEvents.innerHTML = '';
 
@@ -722,10 +809,13 @@ function init() {
   els.viewListBtn = document.getElementById('view-list-btn');
   els.sectionEventsBtn = document.getElementById('section-events-btn');
   els.sectionScheduleBtn = document.getElementById('section-schedule-btn');
+  els.eventsUpdateDot = document.getElementById('events-update-dot');
   els.modalOverlay = document.getElementById('modal-overlay');
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
   els.modalClose = document.getElementById('modal-close');
+
+  updateEventsBadge(); // восстановить точку из прошлого сеанса, если остались непросмотренные даты
 
   for (const wd of WEEKDAYS) {
     const el = document.createElement('div');
