@@ -18,7 +18,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 <!-- Шрифты подключены неблокирующе (preload + swap), чтобы медленная загрузка
      Google Fonts не задерживала выполнение скриптов ниже по странице. -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital@1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -91,6 +91,12 @@
       <button type="button" id="view-grid-btn" class="view-switch__btn" role="tab" aria-selected="true" data-view="grid">Сетка</button>
       <button type="button" id="view-list-btn" class="view-switch__btn" role="tab" aria-selected="false" data-view="list">Список</button>
     </div>
+
+    <div class="cal-nav" id="schedule-nav" hidden>
+      <button id="schedule-prev" class="nav-btn" aria-label="Предыдущий день">&#8592;</button>
+      <h1 id="schedule-title">Понедельник</h1>
+      <button id="schedule-next" class="nav-btn" aria-label="Следующий день">&#8594;</button>
+    </div>
   </header>
 
   <div id="cal-banner" class="cal-banner" hidden></div>
@@ -120,7 +126,7 @@
   </div>
 </div>
 
-<script src="js/config.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
+<script src="js/config.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>

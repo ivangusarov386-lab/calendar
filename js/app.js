@@ -155,6 +155,7 @@ const state = {
   orderIndex: 0,
   view: 'grid', // 'grid' | 'list'
   section: 'events', // 'events' | 'schedule'
+  scheduleDayIndex: 0, // 0..4, Пн..Пт
 };
 
 const els = {};
@@ -250,18 +251,44 @@ function setLoading(isLoading) {
 
 // Расписание не привязано к месяцу — грузится один раз за сеанс (лениво,
 // при первом переключении на вкладку «Расписание») и дальше берётся из
-// scheduleCache, как и мероприятия из monthDataCache.
-let scheduleCache = null;
+// scheduleByDay, как и мероприятия из monthDataCache. Показывается по
+// одному дню за раз — стрелки листают дни недели, как стрелки в
+// «Мероприятиях» листают месяцы.
 let scheduleLoaded = false;
+let scheduleByDay = null; // Map: день недели -> отсортированный массив уроков
+
+function todayScheduleDayIndex() {
+  const jsDay = new Date().getDay(); // 0=Вс..6=Сб
+  const mondayBased = jsDay === 0 ? 6 : jsDay - 1; // 0=Пн..6=Вс
+  return mondayBased <= 4 ? mondayBased : 0; // на выходных по умолчанию — понедельник
+}
+
+function parseScheduleRows(rows) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const [day, num, time, subject, room, teacher] = row;
+    if (!day || !subject || !subject.trim()) continue;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push({
+      num: parseInt(num, 10) || 0,
+      time: (time || '').trim(),
+      subject: subject.trim(),
+      room: (room || '').trim(),
+      teacher: (teacher || '').trim(),
+    });
+  }
+  for (const lessons of byDay.values()) lessons.sort((a, b) => a.num - b.num);
+  return byDay;
+}
 
 async function loadSchedule() {
   if (scheduleLoaded) {
-    renderSchedule(scheduleCache);
+    renderScheduleDay();
     return;
   }
 
   els.banner.hidden = true;
-  renderSchedulePlaceholder('Загрузка…');
+  renderScheduleDay();
 
   if (!isConfigured()) {
     els.banner.hidden = false;
@@ -290,9 +317,9 @@ async function loadSchedule() {
     return;
   }
 
-  scheduleCache = rows;
+  scheduleByDay = parseScheduleRows(rows);
   scheduleLoaded = true;
-  renderSchedule(rows);
+  renderScheduleDay();
 }
 
 function renderSchedulePlaceholder(message) {
@@ -304,83 +331,61 @@ function renderSchedulePlaceholder(message) {
   els.schedulePanel.appendChild(p);
 }
 
-function renderSchedule(rows) {
+function renderScheduleDay() {
+  const day = SCHEDULE_WEEKDAYS[state.scheduleDayIndex];
+  els.scheduleTitle.textContent = day;
+
+  if (!scheduleLoaded) {
+    renderSchedulePlaceholder('Загрузка…');
+    return;
+  }
+
+  const lessons = scheduleByDay.get(day);
+  if (!lessons || !lessons.length) {
+    renderSchedulePlaceholder('На этот день уроков не добавлено.');
+    return;
+  }
+
   els.schedulePanel.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'list-day__events';
+  for (const l of lessons) {
+    const row = document.createElement('div');
+    row.className = 'lesson-row';
 
-  const byDay = new Map();
-  for (const row of rows) {
-    const [day, num, time, subject, room, teacher] = row;
-    if (!day || !subject || !subject.trim()) continue;
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push({
-      num: parseInt(num, 10) || 0,
-      time: (time || '').trim(),
-      subject: subject.trim(),
-      room: (room || '').trim(),
-      teacher: (teacher || '').trim(),
-    });
-  }
+    const num = document.createElement('span');
+    num.className = 'lesson-row__num';
+    num.textContent = l.num || '·';
+    row.appendChild(num);
 
-  let any = false;
-  for (const day of SCHEDULE_WEEKDAYS) {
-    const lessons = byDay.get(day);
-    if (!lessons || !lessons.length) continue;
-    any = true;
-    lessons.sort((a, b) => a.num - b.num);
+    const main = document.createElement('div');
+    main.className = 'lesson-row__main';
 
-    const group = document.createElement('div');
-    group.className = 'list-day';
-
-    const header = document.createElement('div');
-    header.className = 'list-day__header';
-    header.textContent = day;
-    group.appendChild(header);
-
-    const wrap = document.createElement('div');
-    wrap.className = 'list-day__events';
-    for (const l of lessons) {
-      const row = document.createElement('div');
-      row.className = 'lesson-row';
-
-      const num = document.createElement('span');
-      num.className = 'lesson-row__num';
-      num.textContent = l.num || '·';
-      row.appendChild(num);
-
-      const main = document.createElement('div');
-      main.className = 'lesson-row__main';
-
-      const top = document.createElement('div');
-      top.className = 'lesson-row__top';
-      const subj = document.createElement('span');
-      subj.className = 'lesson-row__subject';
-      subj.textContent = l.subject;
-      top.appendChild(subj);
-      if (l.time) {
-        const time = document.createElement('span');
-        time.className = 'lesson-row__time';
-        time.textContent = l.time;
-        top.appendChild(time);
-      }
-      main.appendChild(top);
-
-      const metaParts = [l.room ? `Каб. ${l.room}` : '', l.teacher].filter(Boolean);
-      if (metaParts.length) {
-        const meta = document.createElement('div');
-        meta.className = 'lesson-row__meta';
-        meta.textContent = metaParts.join(' · ');
-        main.appendChild(meta);
-      }
-      row.appendChild(main);
-      wrap.appendChild(row);
+    const top = document.createElement('div');
+    top.className = 'lesson-row__top';
+    const subj = document.createElement('span');
+    subj.className = 'lesson-row__subject';
+    subj.textContent = l.subject;
+    top.appendChild(subj);
+    if (l.time) {
+      const time = document.createElement('span');
+      time.className = 'lesson-row__time';
+      time.textContent = l.time;
+      top.appendChild(time);
     }
-    group.appendChild(wrap);
-    els.schedulePanel.appendChild(group);
-  }
+    main.appendChild(top);
 
-  if (!any) {
-    renderSchedulePlaceholder('Расписание пока не заполнено.');
+    const metaParts = [l.room ? `Каб. ${l.room}` : '', l.teacher].filter(Boolean);
+    if (metaParts.length) {
+      const meta = document.createElement('div');
+      meta.className = 'lesson-row__meta';
+      meta.textContent = metaParts.join(' · ');
+      main.appendChild(meta);
+    }
+    row.appendChild(main);
+    wrap.appendChild(row);
   }
+  els.schedulePanel.appendChild(wrap);
 }
 
 function switchSection(section) {
@@ -399,6 +404,7 @@ function switchSection(section) {
   els.legend.hidden = !isEvents;
   els.panel.hidden = !(isEvents && state.view === 'grid');
   els.list.hidden = !(isEvents && state.view === 'list');
+  els.scheduleNav.hidden = isEvents;
   els.schedulePanel.hidden = isEvents;
 
   els.banner.hidden = true;
@@ -701,6 +707,10 @@ function init() {
   els.panel = document.getElementById('cal-panel');
   els.grid = document.getElementById('cal-grid');
   els.list = document.getElementById('cal-list');
+  els.scheduleNav = document.getElementById('schedule-nav');
+  els.schedulePrevBtn = document.getElementById('schedule-prev');
+  els.scheduleNextBtn = document.getElementById('schedule-next');
+  els.scheduleTitle = document.getElementById('schedule-title');
   els.schedulePanel = document.getElementById('schedule-panel');
   els.weekdays = document.getElementById('cal-weekdays');
   els.banner = document.getElementById('cal-banner');
@@ -726,6 +736,7 @@ function init() {
 
   const idx = todayIndexInOrder();
   state.orderIndex = idx >= 0 ? idx : 0;
+  state.scheduleDayIndex = todayScheduleDayIndex();
 
   let savedSection = 'events';
   try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
@@ -740,6 +751,15 @@ function init() {
   els.sectionScheduleBtn.addEventListener('click', () => switchSection('schedule'));
   els.viewGridBtn.addEventListener('click', () => switchView('grid'));
   els.viewListBtn.addEventListener('click', () => switchView('list'));
+
+  els.schedulePrevBtn.addEventListener('click', () => {
+    state.scheduleDayIndex = (state.scheduleDayIndex - 1 + SCHEDULE_WEEKDAYS.length) % SCHEDULE_WEEKDAYS.length;
+    renderScheduleDay();
+  });
+  els.scheduleNextBtn.addEventListener('click', () => {
+    state.scheduleDayIndex = (state.scheduleDayIndex + 1) % SCHEDULE_WEEKDAYS.length;
+    renderScheduleDay();
+  });
 
   els.prevBtn.addEventListener('click', () => {
     state.orderIndex = (state.orderIndex - 1 + MONTHS_ORDER.length) % MONTHS_ORDER.length;
