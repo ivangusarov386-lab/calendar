@@ -46,7 +46,10 @@ const PARTICIPATION_VALUES = ['Да', 'Нет'];
 const SCHEDULE_SHEET_NAME = 'расписание';
 const SCHEDULE_HEADERS = ['День недели', '№ урока', 'Время', 'Предмет', 'Кабинет', 'Учитель'];
 const SCHEDULE_WEEKDAYS_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
-const SCHEDULE_LESSONS_PER_DAY = 7; // пустые (без «Предмет») строки сайт просто не покажет
+// Это только число строк в стартовом шаблоне — не ограничение. Сайт и сам
+// лист прекрасно работают с любым числом уроков в день: если понадобится
+// больше, используйте меню «Добавить уроки к расписанию…», а не редактируйте
+// эту константу задним числом (лист уже создан — она больше не применится).
 
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -100,24 +103,38 @@ function onOpen() {
     .addItem('Добавить лист на месяц…', 'createMonthSheetDialog')
     .addItem('Настроить проверку данных на текущем листе', 'applyValidationToActiveSheet')
     .addSeparator()
-    .addItem('Создать лист расписания', 'createScheduleSheet')
+    .addItem('Создать лист расписания…', 'createScheduleSheetDialog')
+    .addItem('Добавить уроки к расписанию…', 'addMoreLessonsDialog')
     .addToUi();
 }
 
-function createScheduleSheet() {
-  const ss = getCalendarSpreadsheet();
-  if (ss.getSheetByName(SCHEDULE_SHEET_NAME)) {
-    SpreadsheetApp.getUi().alert(`Лист «${SCHEDULE_SHEET_NAME}» уже существует.`);
+function createScheduleSheetDialog() {
+  const ui = SpreadsheetApp.getUi();
+  if (getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME)) {
+    ui.alert(`Лист «${SCHEDULE_SHEET_NAME}» уже существует. Чтобы добавить ещё уроков — используйте «Добавить уроки к расписанию…».`);
     return;
   }
 
+  const resp = ui.prompt('Расписание уроков', 'Сколько уроков в день заложить в шаблон? (не ограничение — позже можно добавить ещё)', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const lessonsPerDay = parseInt(resp.getResponseText().trim(), 10);
+  if (!(lessonsPerDay >= 1 && lessonsPerDay <= 20)) {
+    ui.alert('Введите число от 1 до 20.');
+    return;
+  }
+
+  createScheduleSheet(lessonsPerDay);
+}
+
+function createScheduleSheet(lessonsPerDay) {
+  const ss = getCalendarSpreadsheet();
   const sheet = ss.insertSheet(SCHEDULE_SHEET_NAME);
   sheet.getRange(1, 1, 1, SCHEDULE_HEADERS.length).setValues([SCHEDULE_HEADERS]).setFontWeight('bold');
   sheet.setFrozenRows(1);
 
   const rows = [];
   for (const day of SCHEDULE_WEEKDAYS_RU) {
-    for (let lesson = 1; lesson <= SCHEDULE_LESSONS_PER_DAY; lesson++) {
+    for (let lesson = 1; lesson <= lessonsPerDay; lesson++) {
       rows.push([day, lesson, '', '', '', '']);
     }
   }
@@ -131,10 +148,50 @@ function createScheduleSheet() {
   sheet.setColumnWidth(6, 160);
 
   SpreadsheetApp.getUi().alert(
-    `Лист «${SCHEDULE_SHEET_NAME}» создан: ${SCHEDULE_WEEKDAYS_RU.length} дней × ${SCHEDULE_LESSONS_PER_DAY} уроков.\n\n` +
+    `Лист «${SCHEDULE_SHEET_NAME}» создан: ${SCHEDULE_WEEKDAYS_RU.length} дней × ${lessonsPerDay} уроков.\n\n` +
     'Заполните «Предмет» (и по желанию «Время»/«Кабинет»/«Учитель») только для реальных уроков — ' +
-    'строки с пустым «Предмет» сайт просто не покажет, лишние можно не трогать.'
+    'строки с пустым «Предмет» сайт просто не покажет, лишние можно не трогать. ' +
+    'Понадобится больше уроков — меню «Добавить уроки к расписанию…».'
   );
+}
+
+// Дописывает N уроков в конец каждого дня, продолжая нумерацию с текущего
+// максимума — можно вызывать сколько угодно раз, если уроков снова не хватило.
+function addMoreLessonsDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
+  if (!sheet) {
+    ui.alert(`Лист «${SCHEDULE_SHEET_NAME}» ещё не создан — сначала «Создать лист расписания…».`);
+    return;
+  }
+
+  const resp = ui.prompt('Добавить уроки', 'Сколько дополнительных уроков добавить в конец каждого дня?', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const extra = parseInt(resp.getResponseText().trim(), 10);
+  if (!(extra >= 1 && extra <= 20)) {
+    ui.alert('Введите число от 1 до 20.');
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const existing = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, 2).getValues(); // День недели, № урока
+  const maxLessonByDay = {};
+  for (const [day, num] of existing) {
+    if (!day) continue;
+    const n = parseInt(num, 10) || 0;
+    if (!maxLessonByDay[day] || n > maxLessonByDay[day]) maxLessonByDay[day] = n;
+  }
+
+  const newRows = [];
+  for (const day of SCHEDULE_WEEKDAYS_RU) {
+    const start = (maxLessonByDay[day] || 0) + 1;
+    for (let lesson = start; lesson < start + extra; lesson++) {
+      newRows.push([day, lesson, '', '', '', '']);
+    }
+  }
+  sheet.getRange(lastRow + 1, 1, newRows.length, SCHEDULE_HEADERS.length).setValues(newRows);
+
+  ui.alert(`Добавлено по ${extra} урок(ов) в конец каждого из ${SCHEDULE_WEEKDAYS_RU.length} дней.`);
 }
 
 function createMonthSheetDialog() {
