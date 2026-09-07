@@ -18,7 +18,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/style.css?v=17">
 <!-- Шрифты подключены неблокирующе (preload + swap), чтобы медленная загрузка
      Google Fonts не задерживала выполнение скриптов ниже по странице. -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital@1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -101,6 +101,19 @@
 
   <div id="cal-banner" class="cal-banner" hidden></div>
 
+  <!-- На iPhone (Safari) значок-точка на иконке приложения работает только
+       после того, как сайт спросит разрешение на уведомления — без этого
+       разрешения iOS не покажет бейдж на иконке, даже если код его
+       выставляет (см. README.md, "Точка на иконке приложения"). Сами
+       уведомления сайт не присылает — разрешение нужно только ради точки. -->
+  <div id="badge-permission-banner" class="cal-banner cal-banner--action" hidden>
+    <p class="cal-banner__text">Показывать красную точку прямо на значке приложения на экране телефона?</p>
+    <div class="cal-banner__actions">
+      <button type="button" id="badge-permission-btn" class="banner-btn banner-btn--primary">Включить</button>
+      <button type="button" id="badge-permission-dismiss" class="banner-btn">Не сейчас</button>
+    </div>
+  </div>
+
   <div class="cal-panel" id="cal-panel">
     <div class="cal-weekdays" id="cal-weekdays"></div>
     <div id="cal-grid" class="cal-grid" role="grid" aria-busy="true"></div>
@@ -126,7 +139,7 @@
   </div>
 </div>
 
-<script src="js/config.js?v=16"></script>
-<script src="js/app.js?v=16"></script>
+<script src="js/config.js?v=17"></script>
+<script src="js/app.js?v=17"></script>
 </body>
 </html>

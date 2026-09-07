@@ -218,6 +218,35 @@ function updateAppIconBadge() {
   } catch (err) { /* браузер может отклонить вызов — не критично */ }
 }
 
+const BADGE_PROMPT_DISMISSED_KEY = 'calendarBadgePromptDismissed';
+
+// Открыт ли сайт как установленное на экран приложение (а не обычная
+// вкладка браузера) — только там вообще имеет смысл спрашивать про значок.
+function isStandalonePwa() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    || window.navigator.standalone === true;
+}
+
+// На iPhone/iPad (WebKit) точка на иконке приложения технически работает
+// через тот же Badging API, но сам браузер показывает её, только если сайт
+// заранее получил разрешение на уведомления — даже если сайт никогда не
+// отправляет ни одного уведомления, это разрешение нужно только как
+// "пропуск" для точки. Без явного клика пользователя браузер это
+// разрешение не выдаст, поэтому показываем баннер с кнопкой один раз.
+function maybeShowBadgePermissionPrompt() {
+  if (!els.badgeBanner) return;
+  if (!('setAppBadge' in navigator) || !('Notification' in window)) return;
+  if (Notification.permission !== 'default') return;
+  if (!isStandalonePwa()) return;
+  if (loadJsonFromStorage(BADGE_PROMPT_DISMISSED_KEY, false)) return;
+  els.badgeBanner.hidden = false;
+}
+
+function dismissBadgePermissionPrompt() {
+  saveJsonToStorage(BADGE_PROMPT_DISMISSED_KEY, true);
+  if (els.badgeBanner) els.badgeBanner.hidden = true;
+}
+
 // Вызывается при открытии карточки дня — «посмотрел», точка для этой даты
 // больше не показывается (пока содержимое снова не изменится).
 function acknowledgeDateSeen(dateKey) {
@@ -970,9 +999,24 @@ function init() {
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
   els.modalClose = document.getElementById('modal-close');
+  els.badgeBanner = document.getElementById('badge-permission-banner');
+  els.badgePermissionBtn = document.getElementById('badge-permission-btn');
+  els.badgePermissionDismiss = document.getElementById('badge-permission-dismiss');
 
   updateEventsBadge(); // восстановить точки/значок иконки из прошлого сеанса
   updateScheduleBadge();
+  maybeShowBadgePermissionPrompt();
+
+  if (els.badgePermissionBtn) {
+    els.badgePermissionBtn.addEventListener('click', async () => {
+      try { await Notification.requestPermission(); } catch (err) { /* не критично */ }
+      dismissBadgePermissionPrompt();
+      updateAppIconBadge(); // сразу применить точку, если уже есть непросмотренное
+    });
+  }
+  if (els.badgePermissionDismiss) {
+    els.badgePermissionDismiss.addEventListener('click', dismissBadgePermissionPrompt);
+  }
 
   for (const wd of WEEKDAYS) {
     const el = document.createElement('div');
