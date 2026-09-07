@@ -1084,7 +1084,7 @@ function init() {
   // и точки/значок обновлений появятся сами. Плюс сразу перепроверяет,
   // когда возвращаетесь на вкладку (например, разворачивали телефон) —
   // не только по таймеру.
-  const AUTO_REFRESH_MS = 5 * 60 * 1000;
+  const AUTO_REFRESH_MS = 90 * 1000;
   function refreshCurrentSection() {
     if (state.section === 'events') loadAndRender();
     else loadSchedule();
