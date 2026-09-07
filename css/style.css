@@ -463,6 +463,12 @@ body::after {
   border-radius: 8px;
   padding: 8px 10px;
 }
+/* Урок, идущий прямо сейчас (по часам) — см. currentLessonIndex в js/app.js. */
+.lesson-row.is-current {
+  border-left-color: #D6A400;
+  background: #FFF8E1;
+  box-shadow: inset 0 0 0 1px #F0D57A;
+}
 .lesson-row__num {
   flex-shrink: 0;
   width: 20px;

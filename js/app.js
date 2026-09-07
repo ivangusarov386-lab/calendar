@@ -232,22 +232,45 @@ const state = {
 
 const els = {};
 
-// Кэш ответов Apps Script на время открытой вкладки: monthNum -> rows
-// (массив) или null («лист не создан»). Повторное открытие уже
-// загруженного в этом сеансе месяца берёт данные отсюда, без нового
-// запроса — переключение назад-вперёд становится мгновенным. При
-// перезагрузке страницы кэш пуст, так что данные снова свежие «как есть».
-const monthDataCache = new Map();
+// Кэш ответов Apps Script: monthNum -> rows (массив) или null («лист не
+// создан»). Хранится и в памяти (мгновенно при переключении месяцев в
+// рамках сеанса), и в localStorage (переживает перезагрузку страницы) —
+// так при открытии сайта заново не нужно ждать ответ сети: сразу
+// показываются последние известные данные, а свежие тихо подгружаются
+// следом и подменяют их, если что-то изменилось (см. loadAndRender).
+const MONTH_CACHE_KEY = 'calendarMonthCache';
+const monthDataCache = new Map(
+  Object.entries(loadJsonFromStorage(MONTH_CACHE_KEY, {})).map(([k, v]) => [Number(k), v])
+);
+
+function persistMonthCache() {
+  saveJsonToStorage(MONTH_CACHE_KEY, Object.fromEntries(monthDataCache));
+}
 
 function isConfigured() {
   return CALENDAR_CONFIG.webAppUrl && !CALENDAR_CONFIG.webAppUrl.startsWith('ВСТАВЬТЕ');
 }
 
+function processAndRenderMonth(rows, monthKey, monthNum, guessedYear) {
+  const byDate = groupRowsByDate(rows);
+  let year = guessedYear;
+  const firstKey = byDate.keys().next().value;
+  if (firstKey) {
+    const parts = firstKey.split('.');
+    if (parts.length === 3 && parts[2]) year = Number(parts[2]);
+  }
+  if (year !== guessedYear) renderGridSkeleton(year, monthNum, monthKey);
+  const unseen = diffAndTrackUpdates(byDate);
+  applyEventsToGrid(byDate, unseen);
+  renderLegend(byDate);
+  renderListView(byDate, year, monthNum, monthKey, unseen);
+}
+
 // Сетку рисуем сразу, не дожидаясь ответа сети — числа месяца меняются
-// мгновенно по клику; события/подсветка донакладываются следующим шагом,
-// когда данные придут (см. applyEventsToGrid). Так переключение месяца не
-// выглядит подвисанием, даже если Apps Script отвечает не сразу (у него
-// всегда есть задержка на "холодный старт" в несколько секунд).
+// мгновенно по клику. Если для месяца уже есть кэш (из этого сеанса или из
+// прошлого визита на сайт) — сразу же показываем его, без «Загрузка…».
+// Свежий ответ от Apps Script запрашивается всегда, в фоне, и тихо
+// обновляет экран, если данные изменились («устаревшее-пока-обновляем»).
 async function loadAndRender() {
   const monthKey = MONTHS_ORDER[state.orderIndex];
   const monthNum = MONTH_NUM[monthKey];
@@ -256,34 +279,54 @@ async function loadAndRender() {
   els.banner.hidden = true;
   els.legend.innerHTML = '';
   renderGridSkeleton(guessedYear, monthNum, monthKey);
-  renderListPlaceholder('Загрузка…');
+
+  const cachedRows = monthDataCache.has(monthNum) ? monthDataCache.get(monthNum) : undefined;
+  const hadCache = cachedRows !== undefined;
+
+  if (hadCache) {
+    if (cachedRows === null) {
+      els.banner.hidden = false;
+      els.banner.textContent = `Лист «${monthKey}» ещё не заполнен.`;
+      renderListPlaceholder('');
+    } else {
+      renderListPlaceholder('');
+      try {
+        processAndRenderMonth(cachedRows, monthKey, monthNum, guessedYear);
+      } catch (err) {
+        renderListPlaceholder('');
+      }
+    }
+  } else {
+    renderListPlaceholder('Загрузка…');
+  }
 
   if (!isConfigured()) {
-    els.banner.hidden = false;
-    els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
-    renderListPlaceholder('');
+    if (!hadCache) {
+      els.banner.hidden = false;
+      els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
+      renderListPlaceholder('');
+    }
     return;
   }
 
+  if (!hadCache) setLoading(true);
   let rows;
-  if (monthDataCache.has(monthNum)) {
-    rows = monthDataCache.get(monthNum);
-  } else {
-    setLoading(true);
-    try {
-      rows = await fetchMonthRows(monthNum);
-    } catch (err) {
-      setLoading(false);
-      if (MONTHS_ORDER[state.orderIndex] === monthKey) {
-        els.banner.hidden = false;
-        els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
-        renderListPlaceholder('');
-      }
-      return;
-    }
+  try {
+    rows = await fetchMonthRows(monthNum);
+  } catch (err) {
     setLoading(false);
-    monthDataCache.set(monthNum, rows);
+    // Если уже показали кэш — молча оставляем его, свежих данных подождём в следующий раз.
+    if (!hadCache && MONTHS_ORDER[state.orderIndex] === monthKey) {
+      els.banner.hidden = false;
+      els.banner.textContent = 'Не удалось загрузить данные из Google Таблицы. Попробуйте обновить страницу.';
+      renderListPlaceholder('');
+    }
+    return;
   }
+  setLoading(false);
+
+  monthDataCache.set(monthNum, rows);
+  persistMonthCache();
 
   // Если пользователь успел переключить месяц, пока шёл этот запрос —
   // не накладываем устаревший ответ поверх уже другой отрисованной сетки.
@@ -297,18 +340,8 @@ async function loadAndRender() {
   }
 
   try {
-    const byDate = groupRowsByDate(rows);
-    let year = guessedYear;
-    const firstKey = byDate.keys().next().value;
-    if (firstKey) {
-      const parts = firstKey.split('.');
-      if (parts.length === 3 && parts[2]) year = Number(parts[2]);
-    }
-    if (year !== guessedYear) renderGridSkeleton(year, monthNum, monthKey);
-    const unseen = diffAndTrackUpdates(byDate);
-    applyEventsToGrid(byDate, unseen);
-    renderLegend(byDate);
-    renderListView(byDate, year, monthNum, monthKey, unseen);
+    processAndRenderMonth(rows, monthKey, monthNum, guessedYear);
+    els.banner.hidden = true;
   } catch (err) {
     els.banner.hidden = false;
     els.banner.textContent = 'Не удалось обработать данные из таблицы. Проверьте формат колонок на листе.';
@@ -322,13 +355,24 @@ function setLoading(isLoading) {
   els.schedulePanel.classList.toggle('is-loading', isLoading);
 }
 
-// Расписание не привязано к месяцу — грузится один раз за сеанс (лениво,
-// при первом переключении на вкладку «Расписание») и дальше берётся из
-// scheduleByDay, как и мероприятия из monthDataCache. Показывается по
+// Расписание не привязано к месяцу — грузится лениво, при первом
+// переключении на вкладку «Расписание». Как и мероприятия, кэшируется в
+// localStorage: при открытии сайта показывается последнее известное
+// расписание сразу, без ожидания, а свежий ответ Apps Script запрашивается
+// в фоне и тихо обновляет экран, если что-то поменялось. Показывается по
 // одному дню за раз — стрелки листают дни недели, как стрелки в
 // «Мероприятиях» листают месяцы.
+const SCHEDULE_CACHE_KEY = 'calendarScheduleCache';
 let scheduleLoaded = false;
 let scheduleByDay = null; // Map: день недели -> отсортированный массив уроков
+
+(function hydrateScheduleFromStorage() {
+  const cached = loadJsonFromStorage(SCHEDULE_CACHE_KEY, null);
+  if (cached) {
+    scheduleByDay = parseScheduleRows(cached);
+    scheduleLoaded = true;
+  }
+})();
 
 function todayScheduleDayIndex() {
   const jsDay = new Date().getDay(); // 0=Вс..6=Сб
@@ -355,41 +399,44 @@ function parseScheduleRows(rows) {
 }
 
 async function loadSchedule() {
-  if (scheduleLoaded) {
-    renderScheduleDay();
-    return;
-  }
-
   els.banner.hidden = true;
-  renderScheduleDay();
+  renderScheduleDay(); // мгновенно показывает кэш, если он есть (см. hydrateScheduleFromStorage)
 
   if (!isConfigured()) {
-    els.banner.hidden = false;
-    els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
-    renderSchedulePlaceholder('');
+    if (!scheduleLoaded) {
+      els.banner.hidden = false;
+      els.banner.textContent = 'Ссылка на Apps Script Web App не настроена. Откройте js/config.js и укажите webAppUrl (см. README.md).';
+      renderSchedulePlaceholder('');
+    }
     return;
   }
 
-  setLoading(true);
+  if (!scheduleLoaded) setLoading(true);
   let rows;
   try {
     rows = await fetchScheduleRows();
   } catch (err) {
     setLoading(false);
-    els.banner.hidden = false;
-    els.banner.textContent = 'Не удалось загрузить расписание. Попробуйте обновить страницу.';
-    renderSchedulePlaceholder('');
+    // Если уже показали кэш — молча оставляем его, свежее подождём в следующий раз.
+    if (!scheduleLoaded) {
+      els.banner.hidden = false;
+      els.banner.textContent = 'Не удалось загрузить расписание. Попробуйте обновить страницу.';
+      renderSchedulePlaceholder('');
+    }
     return;
   }
   setLoading(false);
 
   if (rows === null) {
-    els.banner.hidden = false;
-    els.banner.textContent = 'Лист «расписание» ещё не создан (меню «Календарь → Создать лист расписания» в таблице).';
-    renderSchedulePlaceholder('');
+    if (!scheduleLoaded) {
+      els.banner.hidden = false;
+      els.banner.textContent = 'Лист «расписание» ещё не создан (меню «Календарь → Создать лист расписания» в таблице).';
+      renderSchedulePlaceholder('');
+    }
     return;
   }
 
+  saveJsonToStorage(SCHEDULE_CACHE_KEY, rows);
   scheduleByDay = parseScheduleRows(rows);
   scheduleLoaded = true;
   renderScheduleDay();
@@ -402,6 +449,43 @@ function renderSchedulePlaceholder(message) {
   p.className = 'list-empty';
   p.textContent = message;
   els.schedulePanel.appendChild(p);
+}
+
+// Достаёт первое время ЧЧ:ММ из строки («08:30–09:15» → 510 минут от
+// полуночи). Возвращает null, если время не проставлено/не распознано —
+// такой урок просто не участвует в определении «текущего».
+function parseLessonStartMinutes(timeStr) {
+  const match = /(\d{1,2}):(\d{2})/.exec(timeStr || '');
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+// «Текущий урок» имеет смысл только для реального сегодняшнего дня недели —
+// не когда вы просто листаете расписание стрелками на другой день.
+function isViewingActualToday() {
+  const jsDay = new Date().getDay(); // 0=Вс..6=Сб
+  if (jsDay === 0 || jsDay === 6) return false;
+  return state.scheduleDayIndex === jsDay - 1; // 0=Пн..4=Пт
+}
+
+// Правило: подсвечивается последний по порядку урок, чьё время начала уже
+// наступило. Пока идёт урок — подсвечен он; в перемене между уроками —
+// ещё предыдущий (пока не начался следующий); после последнего урока —
+// подсветка так и остаётся на нём («если уже поздно — как сейчас»). Если
+// не наступило время ни одного урока (ещё раннее утро) — не подсвечивается
+// ничего.
+function currentLessonIndex(lessons) {
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  let best = -1;
+  let bestStart = -1;
+  lessons.forEach((l, i) => {
+    const start = parseLessonStartMinutes(l.time);
+    if (start !== null && start <= nowMinutes && start > bestStart) {
+      best = i;
+      bestStart = start;
+    }
+  });
+  return best;
 }
 
 function renderScheduleDay() {
@@ -419,12 +503,15 @@ function renderScheduleDay() {
     return;
   }
 
+  const currentIndex = isViewingActualToday() ? currentLessonIndex(lessons) : -1;
+
   els.schedulePanel.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'list-day__events';
-  for (const l of lessons) {
+  lessons.forEach((l, i) => {
     const row = document.createElement('div');
     row.className = 'lesson-row';
+    if (i === currentIndex) row.classList.add('is-current');
 
     const num = document.createElement('span');
     num.className = 'lesson-row__num';
@@ -440,6 +527,12 @@ function renderScheduleDay() {
     subj.className = 'lesson-row__subject';
     subj.textContent = l.subject;
     top.appendChild(subj);
+    if (i === currentIndex) {
+      const badge = document.createElement('span');
+      badge.className = 'list-day__badge';
+      badge.textContent = 'Сейчас';
+      top.appendChild(badge);
+    }
     if (l.time) {
       const time = document.createElement('span');
       time.className = 'lesson-row__time';
@@ -457,7 +550,7 @@ function renderScheduleDay() {
     }
     row.appendChild(main);
     wrap.appendChild(row);
-  }
+  });
   els.schedulePanel.appendChild(wrap);
 }
 
@@ -520,11 +613,16 @@ function renderGridSkeleton(year, monthNum, monthKey) {
 
 // Донакладывает мероприятия на уже отрисованные ячейки (без перестройки
 // сетки и повторной анимации появления — только сами ячейки с событиями).
+// Может вызываться несколько раз на одну и ту же сетку (сперва с кэшем,
+// потом со свежими данными из сети) — поэтому сначала подчищает то, что
+// сама же добавила в прошлый раз, вместо того чтобы копить дубликаты.
 function applyEventsToGrid(byDate, unseen) {
   for (const [key, events] of byDate.entries()) {
     if (!events.length) continue;
     const cell = els.grid.querySelector(`[data-date="${key}"]`);
     if (!cell) continue;
+
+    cell.querySelectorAll('.cal-update-dot, .cal-dots, .cal-participation, .cal-count').forEach((el) => el.remove());
 
     cell.classList.add('has-event');
 
@@ -589,13 +687,15 @@ function applyEventsToGrid(byDate, unseen) {
 
     cell.tabIndex = 0;
     cell.setAttribute('role', 'button');
-    cell.addEventListener('click', () => openModal(key, events));
-    cell.addEventListener('keydown', (e) => {
+    // onclick/onkeydown (не addEventListener) — переприсваивание, а не
+    // накопление, при повторном вызове на той же ячейке.
+    cell.onclick = () => openModal(key, events);
+    cell.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openModal(key, events);
       }
-    });
+    };
   }
 }
 
@@ -869,6 +969,12 @@ function init() {
   });
 
   loadAndRender();
+
+  // Подсветка «текущего урока» зависит от часов — обновляем её раз в
+  // минуту, пока открыт раздел «Расписание», без повторного запроса к сети.
+  setInterval(() => {
+    if (state.section === 'schedule') renderScheduleDay();
+  }, 60000);
 }
 
 function showFatalError() {
