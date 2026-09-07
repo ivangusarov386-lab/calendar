@@ -1028,6 +1028,25 @@ function init() {
   setInterval(() => {
     if (state.section === 'schedule') renderScheduleDay();
   }, 60000);
+
+  // Сайт сам подглядывает в таблицу раз в несколько минут, пока страница
+  // открыта — обновляет то, что сейчас показано (месяц мероприятий или
+  // расписание), тем же путём "мгновенно из кэша + тихо сверить свежее",
+  // что и обычная навигация, так что можно просто оставить вкладку открытой
+  // и точки/значок обновлений появятся сами. Плюс сразу перепроверяет,
+  // когда возвращаетесь на вкладку (например, разворачивали телефон) —
+  // не только по таймеру.
+  const AUTO_REFRESH_MS = 5 * 60 * 1000;
+  function refreshCurrentSection() {
+    if (state.section === 'events') loadAndRender();
+    else loadSchedule();
+  }
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refreshCurrentSection();
+  }, AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshCurrentSection();
+  });
 }
 
 function showFatalError() {
