@@ -98,9 +98,13 @@ function formatDateKey(year, monthNum, day) {
 // Данные читаются из Apps Script Web App (apps-script/Code.gs, функция
 // doGet), развёрнутого прямо из самой таблицы — без Google Cloud Console
 // и без API-ключа (см. README.md, раздел "Публикация Web App").
+// cache: 'no-store' + метка времени в URL — без этого браузер (а иногда и
+// сам script.googleusercontent.com) может тихо отдать старый закэшированный
+// ответ на повторный одинаковый GET вместо похода в сеть, и тогда авто-
+// обновление раз в 5 минут будет молча дёргать кэш, а не таблицу.
 async function fetchMonthRows(monthNum) {
-  const url = `${CALENDAR_CONFIG.webAppUrl}?month=${monthNum}`;
-  const res = await fetch(url);
+  const url = `${CALENDAR_CONFIG.webAppUrl}?month=${monthNum}&_=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Apps Script Web App: ${res.status}`);
   }
@@ -110,8 +114,8 @@ async function fetchMonthRows(monthNum) {
 
 // Расписание — GET {webAppUrl}?schedule=1, лист «расписание» (apps-script/Code.gs).
 async function fetchScheduleRows() {
-  const url = `${CALENDAR_CONFIG.webAppUrl}?schedule=1`;
-  const res = await fetch(url);
+  const url = `${CALENDAR_CONFIG.webAppUrl}?schedule=1&_=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Apps Script Web App: ${res.status}`);
   }
