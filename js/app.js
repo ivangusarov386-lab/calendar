@@ -195,6 +195,23 @@ function diffAndTrackUpdates(byDate) {
 function updateEventsBadge(unseen) {
   const set = unseen || new Set(loadJsonFromStorage(UNSEEN_DATES_KEY, []));
   if (els.eventsUpdateDot) els.eventsUpdateDot.hidden = set.size === 0;
+  updateAppIconBadge();
+}
+
+// Красная точка на иконке самого приложения (Badging API) — если сайт
+// установлен на экран телефона/рабочий стол. Отражает состояние на момент
+// последнего открытия сайта: обновилась вкладка, что-то изменилось — точка
+// появляется и остаётся на иконке, пока не зайти и не посмотреть. Не может
+// появиться "вживую", пока приложение закрыто — для этого нужен пуш с
+// сервера, которого у сайта нет (см. README).
+function updateAppIconBadge() {
+  if (!('setAppBadge' in navigator)) return;
+  const hasEventsUnseen = loadJsonFromStorage(UNSEEN_DATES_KEY, []).length > 0;
+  const hasScheduleUnseen = loadJsonFromStorage(SCHEDULE_UNSEEN_KEY, false);
+  try {
+    if (hasEventsUnseen || hasScheduleUnseen) navigator.setAppBadge();
+    else navigator.clearAppBadge();
+  } catch (err) { /* браузер может отклонить вызов — не критично */ }
 }
 
 // Вызывается при открытии карточки дня — «посмотрел», точка для этой даты
@@ -363,6 +380,8 @@ function setLoading(isLoading) {
 // одному дню за раз — стрелки листают дни недели, как стрелки в
 // «Мероприятиях» листают месяцы.
 const SCHEDULE_CACHE_KEY = 'calendarScheduleCache';
+const SCHEDULE_SEEN_SIGNATURE_KEY = 'calendarScheduleSeenSignature';
+const SCHEDULE_UNSEEN_KEY = 'calendarScheduleUnseen';
 let scheduleLoaded = false;
 let scheduleByDay = null; // Map: день недели -> отсортированный массив уроков
 
@@ -396,6 +415,34 @@ function parseScheduleRows(rows) {
   }
   for (const lessons of byDay.values()) lessons.sort((a, b) => a.num - b.num);
   return byDay;
+}
+
+// Расписание не привязано к конкретным дням, как мероприятия, — здесь нет
+// «открыл карточку дня» как естественного сигнала «просмотрел». Поэтому
+// сравнивается целиком: первое знакомство — тихая база, а реальное
+// изменение содержимого выставляет один общий флаг «есть непросмотренное»,
+// который снимается, как только пользователь открывает вкладку «Расписание»
+// (см. switchSection).
+function trackScheduleUpdate(rows) {
+  const sig = JSON.stringify(rows);
+  const prevSig = loadJsonFromStorage(SCHEDULE_SEEN_SIGNATURE_KEY, null);
+  if (prevSig !== null && prevSig !== sig) {
+    saveJsonToStorage(SCHEDULE_UNSEEN_KEY, true);
+  }
+  saveJsonToStorage(SCHEDULE_SEEN_SIGNATURE_KEY, sig);
+  updateScheduleBadge();
+}
+
+function updateScheduleBadge() {
+  const unseen = loadJsonFromStorage(SCHEDULE_UNSEEN_KEY, false);
+  if (els.scheduleUpdateDot) els.scheduleUpdateDot.hidden = !unseen;
+  updateAppIconBadge();
+}
+
+function acknowledgeScheduleSeen() {
+  if (!loadJsonFromStorage(SCHEDULE_UNSEEN_KEY, false)) return;
+  saveJsonToStorage(SCHEDULE_UNSEEN_KEY, false);
+  updateScheduleBadge();
 }
 
 async function loadSchedule() {
@@ -437,6 +484,7 @@ async function loadSchedule() {
   }
 
   saveJsonToStorage(SCHEDULE_CACHE_KEY, rows);
+  trackScheduleUpdate(rows);
   scheduleByDay = parseScheduleRows(rows);
   scheduleLoaded = true;
   renderScheduleDay();
@@ -575,7 +623,10 @@ function switchSection(section) {
 
   els.banner.hidden = true;
 
-  if (!isEvents) loadSchedule();
+  if (!isEvents) {
+    acknowledgeScheduleSeen();
+    loadSchedule();
+  }
 }
 
 function renderGridSkeleton(year, monthNum, monthKey) {
@@ -910,12 +961,14 @@ function init() {
   els.sectionEventsBtn = document.getElementById('section-events-btn');
   els.sectionScheduleBtn = document.getElementById('section-schedule-btn');
   els.eventsUpdateDot = document.getElementById('events-update-dot');
+  els.scheduleUpdateDot = document.getElementById('schedule-update-dot');
   els.modalOverlay = document.getElementById('modal-overlay');
   els.modalDate = document.getElementById('modal-date');
   els.modalEvents = document.getElementById('modal-events');
   els.modalClose = document.getElementById('modal-close');
 
-  updateEventsBadge(); // восстановить точку из прошлого сеанса, если остались непросмотренные даты
+  updateEventsBadge(); // восстановить точки/значок иконки из прошлого сеанса
+  updateScheduleBadge();
 
   for (const wd of WEEKDAYS) {
     const el = document.createElement('div');
