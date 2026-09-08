@@ -435,7 +435,7 @@ function todayScheduleDayIndex() {
 function parseScheduleRows(rows) {
   const byDay = new Map();
   for (const row of rows) {
-    const [day, num, time, subject, room, teacher] = row;
+    const [day, num, time, subject, room, teacher, substitution] = row;
     if (!day || !subject || !subject.trim()) continue;
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push({
@@ -444,6 +444,7 @@ function parseScheduleRows(rows) {
       subject: subject.trim(),
       room: (room || '').trim(),
       teacher: (teacher || '').trim(),
+      substitution: (substitution || '').trim(),
     });
   }
   for (const lessons of byDay.values()) lessons.sort((a, b) => a.num - b.num);
@@ -590,9 +591,12 @@ function renderScheduleDay() {
   const wrap = document.createElement('div');
   wrap.className = 'list-day__events';
   lessons.forEach((l, i) => {
+    const hasSubstitution = !!l.substitution;
+
     const row = document.createElement('div');
     row.className = 'lesson-row';
     if (i === currentIndex) row.classList.add('is-current');
+    if (hasSubstitution) row.classList.add('has-substitution');
 
     const num = document.createElement('span');
     num.className = 'lesson-row__num';
@@ -606,8 +610,16 @@ function renderScheduleDay() {
     top.className = 'lesson-row__top';
     const subj = document.createElement('span');
     subj.className = 'lesson-row__subject';
-    subj.textContent = l.subject;
+    // При замене на первом месте — сама замена, обычный урок уходит в meta
+    // строкой ниже зачёркнутым (см. ниже), а не пропадает совсем.
+    subj.textContent = hasSubstitution ? l.substitution : l.subject;
     top.appendChild(subj);
+    if (hasSubstitution) {
+      const subBadge = document.createElement('span');
+      subBadge.className = 'list-day__badge list-day__badge--substitution';
+      subBadge.textContent = 'Замена';
+      top.appendChild(subBadge);
+    }
     if (i === currentIndex) {
       const badge = document.createElement('span');
       badge.className = 'list-day__badge';
@@ -625,8 +637,13 @@ function renderScheduleDay() {
     const metaParts = [l.room ? `Каб. ${l.room}` : '', l.teacher].filter(Boolean);
     if (metaParts.length) {
       const meta = document.createElement('div');
-      meta.className = 'lesson-row__meta';
-      meta.textContent = metaParts.join(' · ');
+      meta.className = hasSubstitution ? 'lesson-row__meta lesson-row__meta--original' : 'lesson-row__meta';
+      meta.textContent = hasSubstitution ? `Обычно: ${l.subject} · ${metaParts.join(' · ')}` : metaParts.join(' · ');
+      main.appendChild(meta);
+    } else if (hasSubstitution) {
+      const meta = document.createElement('div');
+      meta.className = 'lesson-row__meta lesson-row__meta--original';
+      meta.textContent = `Обычно: ${l.subject}`;
       main.appendChild(meta);
     }
     row.appendChild(main);

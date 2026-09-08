@@ -44,7 +44,11 @@ const PARTICIPATION_VALUES = ['Да', 'Нет'];
 // В отличие от «Мероприятий» строка тут не про конкретную дату, а про
 // день недели + номер урока — расписание одно и то же каждую неделю.
 const SCHEDULE_SHEET_NAME = 'расписание';
-const SCHEDULE_HEADERS = ['День недели', '№ урока', 'Время', 'Предмет', 'Кабинет', 'Учитель'];
+const SCHEDULE_HEADERS = ['День недели', '№ урока', 'Время', 'Предмет', 'Кабинет', 'Учитель', 'Замена'];
+// «Замена» — свободный текст. Если заполнено, сайт показывает его вместо
+// обычного урока на этой строке (с пометкой «Замена»), а исходный предмет/
+// кабинет/учитель — под ним зачёркнутыми, для справки. Пусто — обычный урок,
+// как всегда.
 const SCHEDULE_WEEKDAYS_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
 // Это только число строк в стартовом шаблоне — не ограничение. Сайт и сам
 // лист прекрасно работают с любым числом уроков в день: если понадобится
@@ -136,7 +140,7 @@ function createScheduleSheet(lessonsPerDay) {
   const rows = [];
   for (const day of SCHEDULE_WEEKDAYS_RU) {
     for (let lesson = 1; lesson <= lessonsPerDay; lesson++) {
-      rows.push([day, lesson, '', '', '', '']);
+      rows.push([day, lesson, '', '', '', '', '']);
     }
   }
   sheet.getRange(2, 1, rows.length, SCHEDULE_HEADERS.length).setValues(rows);
@@ -147,6 +151,7 @@ function createScheduleSheet(lessonsPerDay) {
   sheet.setColumnWidth(4, 160);
   sheet.setColumnWidth(5, 90);
   sheet.setColumnWidth(6, 160);
+  sheet.setColumnWidth(7, 200);
 
   SpreadsheetApp.getUi().alert(
     `Лист «${SCHEDULE_SHEET_NAME}» создан: ${SCHEDULE_WEEKDAYS_RU.length} дней × ${lessonsPerDay} уроков.\n\n` +
@@ -187,7 +192,7 @@ function addMoreLessonsDialog() {
   for (const day of SCHEDULE_WEEKDAYS_RU) {
     const start = (maxLessonByDay[day] || 0) + 1;
     for (let lesson = start; lesson < start + extra; lesson++) {
-      newRows.push([day, lesson, '', '', '', '']);
+      newRows.push([day, lesson, '', '', '', '', '']);
     }
   }
   sheet.getRange(lastRow + 1, 1, newRows.length, SCHEDULE_HEADERS.length).setValues(newRows);
