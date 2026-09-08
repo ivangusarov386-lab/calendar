@@ -105,6 +105,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Создать лист расписания…', 'createScheduleSheetDialog')
     .addItem('Добавить уроки к расписанию…', 'addMoreLessonsDialog')
+    .addItem('Настроить автозаполнение расписания по предмету…', 'setupScheduleAutofill')
     .addToUi();
 }
 
@@ -248,6 +249,138 @@ function createMonthSheet(monthNum, year) {
   applyValidation(sheet, rows.length);
 
   SpreadsheetApp.getUi().alert(`Лист «${sheetName}» создан: ${rows.length} строк (по одной на каждый день).`);
+}
+
+// «Предмет» — отдельный справочник (лист) в этой же таблице: Предмет |
+// ФИО учителя | Кабинет, по одной строке на предмет. Нужен, чтобы при
+// выборе предмета в расписании кабинет и учитель подставлялись сами, а не
+// вписывались вручную на каждом уроке.
+const SUBJECT_SHEET_NAME = 'предмет';
+const SUBJECT_HEADERS = ['Предмет', 'ФИО учителя', 'Кабинет'];
+
+function getOrCreateSubjectSheet() {
+  const ss = getCalendarSpreadsheet();
+  let sheet = ss.getSheetByName(SUBJECT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUBJECT_SHEET_NAME);
+  }
+  const firstRow = sheet.getRange(1, 1, 1, SUBJECT_HEADERS.length).getValues()[0];
+  if (firstRow.join('') === '') {
+    sheet.getRange(1, 1, 1, SUBJECT_HEADERS.length).setValues([SUBJECT_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 200);
+    sheet.setColumnWidth(2, 200);
+    sheet.setColumnWidth(3, 100);
+  }
+  return sheet;
+}
+
+// Пункт меню «Настроить автозаполнение расписания по предмету…»: создаёт
+// лист «предмет» (если его ещё нет), делает столбец «Предмет» в расписании
+// выпадающим списком из этого справочника и сразу подставляет кабинет/
+// учителя туда, где предмет уже был указан. Дальше подстановка работает
+// сама — см. onEdit ниже — при каждом выборе предмета из списка.
+function setupScheduleAutofill() {
+  const ui = SpreadsheetApp.getUi();
+  const scheduleSheet = getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
+  if (!scheduleSheet) {
+    ui.alert(`Лист «${SCHEDULE_SHEET_NAME}» ещё не создан — сначала «Создать лист расписания…».`);
+    return;
+  }
+
+  getOrCreateSubjectSheet();
+  const subjectSheet = getCalendarSpreadsheet().getSheetByName(SUBJECT_SHEET_NAME);
+  const subjectListRange = subjectSheet.getRange(2, 1, 999, 1); // предмет!A2:A1000
+
+  const subjectColumnRange = scheduleSheet.getRange(2, 4, 999, 1); // расписание!D2:D1000, с запасом на будущие уроки
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(subjectListRange, true)
+    .setAllowInvalid(true)
+    .build();
+  subjectColumnRange.setDataValidation(rule);
+
+  // На «Учитель» могла раньше стоять своя проверка (список уже введённых
+  // вручную значений) — теперь эта колонка подставляется автоматически,
+  // старое правило будет только мешать (жёлтый треугольник на каждой
+  // автоподставленной ячейке, если её значения нет в том старом списке).
+  scheduleSheet.getRange(2, 6, 999, 1).clearDataValidations();
+
+  backfillScheduleFromSubjects(scheduleSheet);
+
+  ui.alert(
+    'Готово!\n\n' +
+    `1. На листе «${SUBJECT_SHEET_NAME}» заполните строки: Предмет, ФИО учителя, Кабинет — по одной строке на предмет.\n` +
+    `2. В листе «${SCHEDULE_SHEET_NAME}» столбец «Предмет» теперь — выпадающий список из этого справочника.\n` +
+    '3. При выборе предмета «Кабинет» и «Учитель» на этой же строке подставятся сами.\n\n' +
+    'Если у предмета несколько параллельных групп с разными кабинетами/учителями — впишите ' +
+    'нужный кабинет/учителя вручную поверх подстановки на конкретной строке, это не собьётся, ' +
+    'пока вы снова не смените предмет на этой же строке.'
+  );
+}
+
+// Разом подставляет кабинет/учителя туда, где предмет в расписании уже
+// указан, но подстановки ещё не было (например, лист расписания заполняли
+// до того, как завели справочник «предмет»).
+function backfillScheduleFromSubjects(scheduleSheetParam) {
+  const scheduleSheet = scheduleSheetParam || getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
+  if (!scheduleSheet) return;
+  const lastRow = scheduleSheet.getLastRow();
+  if (lastRow < 2) return;
+
+  const subjects = getSubjectLookup();
+  const subjectColumn = scheduleSheet.getRange(2, 4, lastRow - 1, 1).getValues();
+  for (let i = 0; i < subjectColumn.length; i++) {
+    const subject = String(subjectColumn[i][0] || '').trim();
+    if (!subject || !subjects[subject]) continue;
+    const row = i + 2;
+    scheduleSheet.getRange(row, 5).setValue(subjects[subject].room);
+    scheduleSheet.getRange(row, 6).setValue(subjects[subject].teacher);
+  }
+}
+
+// { 'Физика': { teacher: 'Гусаров И.В', room: '2.36' }, ... } из листа «предмет».
+function getSubjectLookup() {
+  const map = {};
+  const sheet = getCalendarSpreadsheet().getSheetByName(SUBJECT_SHEET_NAME);
+  if (!sheet) return map;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  const values = sheet.getRange(2, 1, lastRow - 1, SUBJECT_HEADERS.length).getValues();
+  for (const [subject, teacher, room] of values) {
+    const key = String(subject || '').trim();
+    if (!key) continue;
+    map[key] = { teacher: teacher || '', room: room || '' };
+  }
+  return map;
+}
+
+// Простой триггер — Google запускает его сам при любом ручном изменении
+// ячейки в таблице, отдельно включать не нужно. Реагирует только на
+// изменение столбца «Предмет» (D) листа «расписание»: подставляет кабинет
+// и учителя из листа «предмет» на этой же строке (или очищает их, если
+// предмет стёрли). Работает и при вставке сразу нескольких строк в столбец.
+function onEdit(e) {
+  if (!e || !e.range) return;
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== SCHEDULE_SHEET_NAME) return;
+  if (e.range.getColumn() !== 4 || e.range.getLastColumn() !== 4) return; // только столбец «Предмет»
+
+  const startRow = e.range.getRow();
+  const numRows = e.range.getNumRows();
+  const subjects = getSubjectLookup();
+  const subjectValues = e.range.getValues();
+
+  for (let i = 0; i < numRows; i++) {
+    const row = startRow + i;
+    if (row < 2) continue;
+    const subject = String(subjectValues[i][0] || '').trim();
+    if (subject && subjects[subject]) {
+      sheet.getRange(row, 5).setValue(subjects[subject].room);
+      sheet.getRange(row, 6).setValue(subjects[subject].teacher);
+    } else if (!subject) {
+      sheet.getRange(row, 5, 1, 2).clearContent();
+    }
+  }
 }
 
 function applyValidationToActiveSheet() {
