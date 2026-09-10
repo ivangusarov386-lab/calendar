@@ -142,6 +142,31 @@ function getSubstitutionRows() {
   return { rows };
 }
 
+// Пункт меню: включает встроенный календарь-пикер Google Таблиц в столбце
+// «Дата» листа «замена» — правило проверки данных «Дата» показывает
+// иконку календаря по клику на ячейку, вписывать дату руками не нужно.
+// setAllowInvalid(false) — намеренно строго: нераспознанная дата в этом
+// столбце тихо не покажется на сайте (не сломается, а просто не сработает
+// эта замена), лучше не дать такое вписать вовсе.
+function setupSubstitutionsDatePicker() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getCalendarSpreadsheet().getSheetByName(SUBSTITUTIONS_SHEET_NAME);
+  if (!sheet) {
+    ui.alert(`Лист «${SUBSTITUTIONS_SHEET_NAME}» ещё не создан. Создайте его вручную (три столбца: Дата | Номер урока | Где замена) и запустите этот пункт меню ещё раз.`);
+    return;
+  }
+
+  const dateRange = sheet.getRange(2, 1, 999, 1); // столбец «Дата», с запасом на будущие строки
+  const rule = SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build();
+  dateRange.setDataValidation(rule);
+  dateRange.setNumberFormat('dd.mm.yyyy');
+
+  ui.alert(
+    `Готово! В столбце «Дата» листа «${SUBSTITUTIONS_SHEET_NAME}» теперь календарь: ` +
+    'кликните на ячейку — справа появится иконка календаря, через неё и выбирайте дату.'
+  );
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Календарь')
@@ -151,6 +176,7 @@ function onOpen() {
     .addItem('Создать лист расписания…', 'createScheduleSheetDialog')
     .addItem('Добавить уроки к расписанию…', 'addMoreLessonsDialog')
     .addItem('Настроить автозаполнение расписания по предмету…', 'setupScheduleAutofill')
+    .addItem('Включить календарь в столбце «Дата» листа «замена»', 'setupSubstitutionsDatePicker')
     .addToUi();
 }
 
