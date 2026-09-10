@@ -508,6 +508,50 @@ function applyVacationHighlighting() {
   if (state.section === 'schedule') renderScheduleDay();
 }
 
+// «Замена» на конкретную дату — отдельный лист «замена» в той же таблице:
+// Дата | Номер урока | Где замена. В отличие от столбца «Замена» в самом
+// расписании (который повторяется КАЖДУЮ неделю на этот день недели), это
+// разовая замена на один конкретный день — то, как замены обычно и
+// работают в школе. Ключ — "ДД.ММ.ГГГГ|номер урока".
+const SUBSTITUTIONS_CACHE_KEY = 'calendarSubstitutionsCache';
+let substitutionsByKey = new Map();
+
+(function hydrateSubstitutionsFromStorage() {
+  const cached = loadJsonFromStorage(SUBSTITUTIONS_CACHE_KEY, null);
+  if (cached) substitutionsByKey = parseSubstitutionRows(cached);
+})();
+
+function parseSubstitutionRows(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const [dateStr, numStr, text] = row;
+    const dateKey = (dateStr || '').trim();
+    const num = parseInt(numStr, 10);
+    const value = (text || '').trim();
+    if (!dateKey || !num || !value) continue;
+    map.set(`${dateKey}|${num}`, value);
+  }
+  return map;
+}
+
+async function fetchSubstitutionRows() {
+  const url = `${CALENDAR_CONFIG.webAppUrl}?substitutions=1&_=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Apps Script Web App: ${res.status}`);
+  const json = await res.json();
+  return json.rows; // null, если лист «замена» ещё не создан
+}
+
+async function loadSubstitutions() {
+  if (!isConfigured()) return;
+  let rows;
+  try { rows = await fetchSubstitutionRows(); } catch (err) { return; }
+  if (rows === null) return;
+  substitutionsByKey = parseSubstitutionRows(rows);
+  saveJsonToStorage(SUBSTITUTIONS_CACHE_KEY, rows);
+  if (state.section === 'schedule') renderScheduleDay();
+}
+
 function todayScheduleDayIndex() {
   const jsDay = new Date().getDay(); // 0=Вс..6=Сб
   const mondayBased = jsDay === 0 ? 6 : jsDay - 1; // 0=Пн..6=Вс
@@ -673,12 +717,18 @@ function renderScheduleDay() {
   }
 
   const currentIndex = isViewingActualToday() ? currentLessonIndex(lessons) : -1;
+  const dateKey = dateKeyForScheduleWeekday(state.scheduleDayIndex);
 
   els.schedulePanel.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'list-day__events';
   lessons.forEach((l, i) => {
-    const hasSubstitution = !!l.substitution;
+    // Замена на конкретную дату (лист «замена»: Дата | Номер урока | Где
+    // замена) важнее, чем замена по дню недели насовсем (столбец «Замена»
+    // в самом расписании) — если заполнены оба, побеждает более точная,
+    // привязанная к дате.
+    const substitution = substitutionsByKey.get(`${dateKey}|${l.num}`) || l.substitution;
+    const hasSubstitution = !!substitution;
 
     const row = document.createElement('div');
     row.className = 'lesson-row';
@@ -699,7 +749,7 @@ function renderScheduleDay() {
     subj.className = 'lesson-row__subject';
     // При замене на первом месте — сама замена, обычный урок уходит в meta
     // строкой ниже зачёркнутым (см. ниже), а не пропадает совсем.
-    subj.textContent = hasSubstitution ? l.substitution : l.subject;
+    subj.textContent = hasSubstitution ? substitution : l.subject;
     top.appendChild(subj);
     if (hasSubstitution) {
       const subBadge = document.createElement('span');
@@ -1194,6 +1244,7 @@ function init() {
     if (state.section === 'events') loadAndRender();
     else loadSchedule();
     loadVacations();
+    loadSubstitutions();
   }
   setInterval(() => {
     if (document.visibilityState === 'visible') refreshCurrentSection();
@@ -1202,7 +1253,10 @@ function init() {
     if (document.visibilityState === 'visible') refreshCurrentSection();
   });
 
-  loadVacations(); // отдельно от refreshCurrentSection — нужно сразу при первом открытии
+  // Отдельно от refreshCurrentSection — нужны сразу при первом открытии,
+  // а не только при следующем авто-обновлении.
+  loadVacations();
+  loadSubstitutions();
 }
 
 function showFatalError() {

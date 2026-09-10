@@ -59,13 +59,14 @@ function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Сайт обращается сюда тремя способами:
+// Сайт обращается сюда четырьмя способами:
 // - GET {URL}?month=9 (номер месяца, 1-12) — мероприятия. Номер, а не
 //   русское название — google-редирект script.google.com →
 //   script.googleusercontent.com иногда портит кириллицу в query-параметрах,
 //   с цифрами такой проблемы нет.
 // - GET {URL}?schedule=1 — расписание уроков.
 // - GET {URL}?vacations=1 — периоды каникул.
+// - GET {URL}?substitutions=1 — замены на конкретную дату.
 // Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
 // видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
 // даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
@@ -79,6 +80,10 @@ function doGet(e) {
 
   if (params.vacations) {
     return jsonResponse(getVacationRows());
+  }
+
+  if (params.substitutions) {
+    return jsonResponse(getSubstitutionRows());
   }
 
   const monthNum = parseInt(params.month || '', 10);
@@ -118,6 +123,22 @@ function getVacationRows() {
   if (!sheet) return { rows: null };
   const lastRow = sheet.getLastRow();
   const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, VACATIONS_HEADERS_COUNT).getDisplayValues();
+  return { rows };
+}
+
+// «Замена» — отдельный лист в этой же таблице: Дата | Номер урока | Где
+// замена, одна строка на разовую замену конкретного урока в конкретный
+// день (в отличие от столбца «Замена» в самом расписании, который
+// повторяется каждую неделю на этот день недели). Сайт показывает её
+// поверх обычного урока в тот день — см. js/app.js.
+const SUBSTITUTIONS_SHEET_NAME = 'замена';
+const SUBSTITUTIONS_HEADERS_COUNT = 3; // Дата, Номер урока, Где замена
+
+function getSubstitutionRows() {
+  const sheet = getCalendarSpreadsheet().getSheetByName(SUBSTITUTIONS_SHEET_NAME);
+  if (!sheet) return { rows: null };
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SUBSTITUTIONS_HEADERS_COUNT).getDisplayValues();
   return { rows };
 }
 
