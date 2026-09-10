@@ -59,12 +59,13 @@ function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Сайт обращается сюда двумя способами:
+// Сайт обращается сюда тремя способами:
 // - GET {URL}?month=9 (номер месяца, 1-12) — мероприятия. Номер, а не
 //   русское название — google-редирект script.google.com →
 //   script.googleusercontent.com иногда портит кириллицу в query-параметрах,
 //   с цифрами такой проблемы нет.
 // - GET {URL}?schedule=1 — расписание уроков.
+// - GET {URL}?vacations=1 — периоды каникул.
 // Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
 // видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
 // даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
@@ -74,6 +75,10 @@ function doGet(e) {
 
   if (params.schedule) {
     return jsonResponse(getScheduleRows());
+  }
+
+  if (params.vacations) {
+    return jsonResponse(getVacationRows());
   }
 
   const monthNum = parseInt(params.month || '', 10);
@@ -98,6 +103,21 @@ function getScheduleRows() {
   if (!sheet) return { rows: null };
   const lastRow = sheet.getLastRow();
   const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SCHEDULE_HEADERS.length).getDisplayValues();
+  return { rows };
+}
+
+// «Каникулы» — отдельный лист в этой же таблице: С какого числа | До
+// какого числа (обе даты включительно, ДД.ММ.ГГГГ), одна строка на период.
+// Сайт красит такие дни серым в календаре и пишет «Каникулы» в расписании
+// вместо уроков — см. js/app.js.
+const VACATIONS_SHEET_NAME = 'каникулы';
+const VACATIONS_HEADERS_COUNT = 2; // С какого числа, До какого числа
+
+function getVacationRows() {
+  const sheet = getCalendarSpreadsheet().getSheetByName(VACATIONS_SHEET_NAME);
+  if (!sheet) return { rows: null };
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, VACATIONS_HEADERS_COUNT).getDisplayValues();
   return { rows };
 }
 

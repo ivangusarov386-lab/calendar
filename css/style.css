@@ -588,6 +588,18 @@ body::after {
   background: #f2f4fb;
 }
 
+/* Каникулы (лист «каникулы», apps-script/Code.gs) — красим серым только
+   дни без мероприятий: инлайн-фон цвета категории (см. applyEventsToGrid
+   в js/app.js) сильнее любого класса, так что реальное школьное событие в
+   эти дни по-прежнему видно как обычно. .is-today объявлен ниже по файлу
+   и поэтому перекрывает этот фон, если день одновременно и сегодня. */
+.cal-cell.is-vacation:not(.has-event) {
+  background: #E1E4EA;
+}
+.cal-cell.is-vacation:not(.has-event) .cal-daynum {
+  color: var(--ink-dark-muted);
+}
+
 .cal-cell.is-today {
   background: #FFF3B8;
   border-color: #D6A400;

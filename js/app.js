@@ -426,6 +426,88 @@ let scheduleByDay = null; // Map: день недели -> отсортиров�
   }
 })();
 
+// «Каникулы» — периоды из листа «каникулы» (apps-script/Code.gs): красим
+// такие дни серым в календаре и пишем «Каникулы» в расписании вместо
+// уроков. Список периодов меняется редко, поэтому, как и расписание,
+// кэшируется в localStorage — доступен сразу, без ожидания сети.
+const VACATIONS_CACHE_KEY = 'calendarVacationsCache';
+let vacationRanges = []; // [{ startNum, endNum }] — границы включительно, ГГГГММДД как число
+
+(function hydrateVacationsFromStorage() {
+  const cached = loadJsonFromStorage(VACATIONS_CACHE_KEY, null);
+  if (cached) vacationRanges = parseVacationRows(cached);
+})();
+
+// "ДД.ММ.ГГГГ" -> ГГГГММДД числом, чтобы сравнивать даты по порядку —
+// сам текстовый ключ для этого не годится (день идёт первым в строке).
+function dateKeyToNum(key) {
+  const parts = (key || '').split('.');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts;
+  if (!dd || !mm || !yyyy) return null;
+  return Number(yyyy) * 10000 + Number(mm) * 100 + Number(dd);
+}
+
+function parseVacationRows(rows) {
+  const ranges = [];
+  for (const row of rows) {
+    const [startStr, endStr] = row;
+    const startNum = dateKeyToNum((startStr || '').trim());
+    const endNum = dateKeyToNum((endStr || '').trim());
+    if (startNum === null || endNum === null) continue;
+    ranges.push({ startNum: Math.min(startNum, endNum), endNum: Math.max(startNum, endNum) });
+  }
+  return ranges;
+}
+
+function isVacationDate(key) {
+  const num = dateKeyToNum(key);
+  if (num === null) return false;
+  return vacationRanges.some((r) => num >= r.startNum && num <= r.endNum);
+}
+
+// Расписание не привязано к конкретным датам (только к дням недели), а
+// «каникулы» — это реальные даты. Чтобы понять, не приходится ли просматри-
+// ваемый день недели на каникулы, берём дату этого дня недели В ТЕКУЩЕЙ
+// календарной неделе (по часам устройства).
+function dateKeyForScheduleWeekday(weekdayIndex) {
+  const now = new Date();
+  const jsDay = now.getDay(); // 0=Вс..6=Сб
+  const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset + weekdayIndex);
+  return formatDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+async function fetchVacationRows() {
+  const url = `${CALENDAR_CONFIG.webAppUrl}?vacations=1&_=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Apps Script Web App: ${res.status}`);
+  const json = await res.json();
+  return json.rows; // null, если лист «каникулы» ещё не создан
+}
+
+// Тихо (без баннеров/ошибок — это не основной контент, максимум просто не
+// будет подсветки) подгружает периоды каникул и обновляет то, что уже
+// нарисовано на экране: точечно перекрашивает существующие ячейки сетки
+// (без пересборки/анимации) и, если открыто «Расписание», перерисовывает
+// текущий день.
+async function loadVacations() {
+  if (!isConfigured()) return;
+  let rows;
+  try { rows = await fetchVacationRows(); } catch (err) { return; }
+  if (rows === null) return;
+  vacationRanges = parseVacationRows(rows);
+  saveJsonToStorage(VACATIONS_CACHE_KEY, rows);
+  applyVacationHighlighting();
+}
+
+function applyVacationHighlighting() {
+  els.grid.querySelectorAll('.cal-cell[data-date]').forEach((cell) => {
+    cell.classList.toggle('is-vacation', isVacationDate(cell.dataset.date));
+  });
+  if (state.section === 'schedule') renderScheduleDay();
+}
+
 function todayScheduleDayIndex() {
   const jsDay = new Date().getDay(); // 0=Вс..6=Сб
   const mondayBased = jsDay === 0 ? 6 : jsDay - 1; // 0=Пн..6=Вс
@@ -579,6 +661,11 @@ function renderScheduleDay() {
     return;
   }
 
+  if (isVacationDate(dateKeyForScheduleWeekday(state.scheduleDayIndex))) {
+    renderSchedulePlaceholder('Каникулы');
+    return;
+  }
+
   const lessons = scheduleByDay.get(day);
   if (!lessons || !lessons.length) {
     renderSchedulePlaceholder('На этот день уроков не добавлено.');
@@ -701,6 +788,7 @@ function renderGridSkeleton(year, monthNum, monthKey) {
     cell.dataset.date = key;
     cell.style.animationDelay = `${Math.min(i, 20) * 12}ms`;
     if (weekday === 5 || weekday === 6) cell.classList.add('is-weekend');
+    if (isVacationDate(key)) cell.classList.add('is-vacation');
     if (key === todayKey) cell.classList.add('is-today');
 
     const num = document.createElement('div');
@@ -1105,6 +1193,7 @@ function init() {
   function refreshCurrentSection() {
     if (state.section === 'events') loadAndRender();
     else loadSchedule();
+    loadVacations();
   }
   setInterval(() => {
     if (document.visibilityState === 'visible') refreshCurrentSection();
@@ -1112,6 +1201,8 @@ function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshCurrentSection();
   });
+
+  loadVacations(); // отдельно от refreshCurrentSection — нужно сразу при первом открытии
 }
 
 function showFatalError() {
