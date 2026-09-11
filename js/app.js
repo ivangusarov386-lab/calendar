@@ -313,6 +313,7 @@ function processAndRenderMonth(rows, monthKey, monthNum, guessedYear) {
   const unseen = diffAndTrackUpdates(byDate);
   applyEventsToGrid(byDate, unseen);
   renderLegend(byDate);
+  updateVacationLegend(year, monthNum);
   renderListView(byDate, year, monthNum, monthKey, unseen);
 }
 
@@ -505,7 +506,12 @@ function applyVacationHighlighting() {
   els.grid.querySelectorAll('.cal-cell[data-date]').forEach((cell) => {
     cell.classList.toggle('is-vacation', isVacationDate(cell.dataset.date));
   });
-  if (state.section === 'schedule') renderScheduleDay();
+  if (state.section === 'events') {
+    const monthKey = MONTHS_ORDER[state.orderIndex];
+    updateVacationLegend(guessYearForMonth(monthKey, new Date()), MONTH_NUM[monthKey]);
+  } else {
+    renderScheduleDay();
+  }
 }
 
 // «Замена» на конкретную дату — отдельный лист «замена» в той же таблице:
@@ -1067,6 +1073,35 @@ function renderLegend(byDate) {
     item.appendChild(label);
     els.legend.appendChild(item);
   }
+}
+
+function hasVacationInMonth(year, monthNum) {
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (isVacationDate(formatDateKey(year, monthNum, d))) return true;
+  }
+  return false;
+}
+
+// Отдельно от renderLegend (которая перерисовывает всю легенду с нуля из
+// категорий мероприятий) — этот пункт сам решает, добавлять себя или нет,
+// и вызывается отдельно, в том числе когда каникулы подгрузились уже
+// после того, как легенда была нарисована (см. applyVacationHighlighting).
+function updateVacationLegend(year, monthNum) {
+  const existing = els.legend.querySelector('.legend-item--vacation');
+  if (existing) existing.remove();
+  if (!hasVacationInMonth(year, monthNum)) return;
+
+  const item = document.createElement('div');
+  item.className = 'legend-item legend-item--vacation';
+  const dot = document.createElement('span');
+  dot.className = 'legend-dot';
+  dot.style.background = '#D3D8E2';
+  item.appendChild(dot);
+  const label = document.createElement('span');
+  label.textContent = 'Каникулы';
+  item.appendChild(label);
+  els.legend.appendChild(item);
 }
 
 function openModal(dateKey, events) {

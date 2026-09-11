@@ -594,10 +594,29 @@ body::after {
    эти дни по-прежнему видно как обычно. .is-today объявлен ниже по файлу
    и поэтому перекрывает этот фон, если день одновременно и сегодня. */
 .cal-cell.is-vacation:not(.has-event) {
-  background: #E1E4EA;
+  background: #D3D8E2;
 }
 .cal-cell.is-vacation:not(.has-event) .cal-daynum {
   color: var(--ink-dark-muted);
+}
+/* Подпись прямо на ячейке — иначе серый цвет каникул слишком похож на
+   серый цвет выходных (.is-weekend) и непонятно, что именно означает
+   заливка. Через ::after, а не обычный элемент, — тогда подпись сама
+   появляется/исчезает вместе с классом is-vacation, без лишней ручной
+   синхронизации DOM в js/app.js (в т.ч. когда каникулы подгружаются уже
+   после того, как сетка отрисована — см. applyVacationHighlighting). */
+.cal-cell.is-vacation:not(.has-event)::after {
+  content: 'Каникулы';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 6px;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-dark-muted);
+  pointer-events: none;
 }
 
 .cal-cell.is-today {
