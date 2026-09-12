@@ -29,7 +29,7 @@ const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 // Расписание уроков — те же названия дней, что в apps-script/Code.gs
 // (SCHEDULE_WEEKDAYS_RU), лист «расписание».
-const SCHEDULE_WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+const SCHEDULE_WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
 // Закреплённые цвета для известных категорий «Вид мероприятия» — тот же
 // список (по написанию), что и EVENT_KINDS в apps-script/Code.gs, где он
@@ -561,7 +561,7 @@ async function loadSubstitutions() {
 function todayScheduleDayIndex() {
   const jsDay = new Date().getDay(); // 0=Вс..6=Сб
   const mondayBased = jsDay === 0 ? 6 : jsDay - 1; // 0=Пн..6=Вс
-  return mondayBased <= 4 ? mondayBased : 0; // на выходных по умолчанию — понедельник
+  return mondayBased <= 5 ? mondayBased : 0; // в воскресенье по умолчанию — понедельник
 }
 
 function parseScheduleRows(rows) {
@@ -678,8 +678,8 @@ function parseLessonStartMinutes(timeStr) {
 // не когда вы просто листаете расписание стрелками на другой день.
 function isViewingActualToday() {
   const jsDay = new Date().getDay(); // 0=Вс..6=Сб
-  if (jsDay === 0 || jsDay === 6) return false;
-  return state.scheduleDayIndex === jsDay - 1; // 0=Пн..4=Пт
+  if (jsDay === 0) return false; // воскресенья нет в SCHEDULE_WEEKDAYS
+  return state.scheduleDayIndex === jsDay - 1; // 0=Пн..5=Сб
 }
 
 // Правило: подсвечивается последний по порядку урок, чьё время начала уже
