@@ -954,19 +954,28 @@ function renderEventCell(key, events, isUnseen) {
     }
     if (!kindColors.length) kindColors.push('#8892A6');
 
-    // «Участие» красит всю ячейку — Да зелёным, Нет красным (пополам по
-    // диагонали, если за день есть и то, и другое) — это важнее для
-    // быстрого взгляда «идём или нет», чем категория, поэтому и забирает
-    // фон себе. Категория никуда не делась — она всё ещё видна точками в
-    // углу. Нет ни одного мероприятия с проставленным «Участие» — фон,
-    // как и раньше, красится цветом категории.
-    const hasDa = events.some((e) => e.participation === 'Да');
-    const hasNet = events.some((e) => e.participation === 'Нет');
-    const partColors = [];
-    if (hasDa) partColors.push('#2F9E56');
-    if (hasNet) partColors.push('#D64545');
+    // Фон ячейки красится по времени + «Участию»: все будущие мероприятия
+    // (сегодняшнее считаем ещё не прошедшим) — красным, независимо от
+    // «Участия» — итог там ещё не определился. Для уже прошедших —
+    // «Участие» решает: Да зелёным, Нет жёлтым (пополам по диагонали,
+    // если за день есть и то, и другое). Категория никуда не делась —
+    // она всё ещё видна точками в углу. Ни одного мероприятия с
+    // проставленным «Участие» в прошедший день — фон, как и раньше,
+    // красится цветом категории.
+    const todayKeyForCell = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+    const isFutureOrToday = dateKeyToNum(key) >= dateKeyToNum(todayKeyForCell);
 
-    const bgColors = partColors.length ? partColors : kindColors;
+    let bgColors;
+    if (isFutureOrToday) {
+      bgColors = ['#D64545'];
+    } else {
+      const hasDa = events.some((e) => e.participation === 'Да');
+      const hasNet = events.some((e) => e.participation === 'Нет');
+      const partColors = [];
+      if (hasDa) partColors.push('#2F9E56');
+      if (hasNet) partColors.push('#D6A400');
+      bgColors = partColors.length ? partColors : kindColors;
+    }
     cell.style.background = bgColors.length === 1
       ? tintWithWhite(bgColors[0], 0.8)
       : `linear-gradient(135deg, ${bgColors.map((c, i) => `${tintWithWhite(c, 0.8)} ${(i / bgColors.length) * 100}% ${((i + 1) / bgColors.length) * 100}%`).join(', ')})`;
