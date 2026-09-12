@@ -63,7 +63,7 @@ function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Сайт обращается сюда четырьмя способами:
+// Сайт обращается сюда пятью способами:
 // - GET {URL}?month=9 (номер месяца, 1-12) — мероприятия. Номер, а не
 //   русское название — google-редирект script.google.com →
 //   script.googleusercontent.com иногда портит кириллицу в query-параметрах,
@@ -71,6 +71,7 @@ function jsonResponse(obj) {
 // - GET {URL}?schedule=1 — расписание уроков.
 // - GET {URL}?vacations=1 — периоды каникул.
 // - GET {URL}?substitutions=1 — замены на конкретную дату.
+// - GET {URL}?visit=1&vid=... — счётчик заходов (см. logVisit ниже).
 // Отдаёт { rows: [...] } — строки листа (без строки заголовка), как их
 // видно в таблице (getDisplayValues, а не getValues) — это важно, иначе
 // даты уедут в формат JS Date вместо "ДД.ММ.ГГГГ", который ждёт сайт.
@@ -88,6 +89,11 @@ function doGet(e) {
 
   if (params.substitutions) {
     return jsonResponse(getSubstitutionRows());
+  }
+
+  if (params.visit) {
+    logVisit(params.vid || '');
+    return jsonResponse({ ok: true });
   }
 
   const monthNum = parseInt(params.month || '', 10);
@@ -144,6 +150,40 @@ function getSubstitutionRows() {
   const lastRow = sheet.getLastRow();
   const rows = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SUBSTITUTIONS_HEADERS_COUNT).getDisplayValues();
   return { rows };
+}
+
+// Счётчик заходов на сайт — отдельный лист «визиты» в этой же таблице:
+// одна строка на каждое открытие сайта (Дата и время | ID устройства).
+// ID устройства — случайная строка, которую сайт сам придумывает и
+// запоминает в localStorage браузера (см. js/app.js) — не ФИО и не email,
+// просто чтобы отличить одно и то же устройство от другого. Ваши
+// собственные заходы сайт не шлёт вовсе — см. README, раздел «Счётчик
+// посетителей». В столбцах D/E — готовые формулы: всего заходов и
+// заходов с разных устройств, ничего строить/считать вручную не нужно.
+const VISITS_SHEET_NAME = 'визиты';
+const VISITS_HEADERS = ['Дата и время', 'ID устройства'];
+
+function getOrCreateVisitsSheet() {
+  const ss = getCalendarSpreadsheet();
+  let sheet = ss.getSheetByName(VISITS_SHEET_NAME);
+  if (sheet) return sheet;
+
+  sheet = ss.insertSheet(VISITS_SHEET_NAME);
+  sheet.getRange(1, 1, 1, VISITS_HEADERS.length).setValues([VISITS_HEADERS]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.getRange('D1').setValue('Всего заходов').setFontWeight('bold');
+  sheet.getRange('E1').setFormula('=COUNTA(A2:A)');
+  sheet.getRange('D2').setValue('Разных устройств').setFontWeight('bold');
+  sheet.getRange('E2').setFormula('=COUNTA(UNIQUE(FILTER(B2:B, B2:B<>"")))');
+  sheet.setColumnWidth(1, 160);
+  sheet.setColumnWidth(2, 260);
+  sheet.setColumnWidth(4, 150);
+  return sheet;
+}
+
+function logVisit(visitorId) {
+  const sheet = getOrCreateVisitsSheet();
+  sheet.appendRow([new Date(), visitorId]);
 }
 
 // Пункт меню: включает встроенный календарь-пикер Google Таблиц в столбце

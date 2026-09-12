@@ -311,6 +311,46 @@ function isConfigured() {
   return CALENDAR_CONFIG.webAppUrl && !CALENDAR_CONFIG.webAppUrl.startsWith('ВСТАВЬТЕ');
 }
 
+// Счётчик заходов (лист «визиты», apps-script/Code.gs) — при каждом
+// открытии сайта тихо сообщает об этом, кроме визитов владельца (см.
+// README, «Счётчик посетителей»): один раз откройте сайт по ссылке с
+// добавленным «?owner=1» на своих устройствах — дальше эти устройства
+// сами исключат себя из счёта навсегда, без похода в таблицу руками.
+const VISITOR_ID_KEY = 'calendarVisitorId';
+const OWNER_FLAG_KEY = 'calendarIsOwner';
+
+function applyOwnerFlagFromUrl() {
+  try {
+    if (new URLSearchParams(location.search).get('owner')) {
+      localStorage.setItem(OWNER_FLAG_KEY, '1');
+    }
+  } catch (err) { /* приватный режим — не критично */ }
+}
+
+function isOwnerDevice() {
+  try { return localStorage.getItem(OWNER_FLAG_KEY) === '1'; } catch (err) { return false; }
+}
+
+function getOrCreateVisitorId() {
+  try {
+    let id = localStorage.getItem(VISITOR_ID_KEY);
+    if (!id) {
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(VISITOR_ID_KEY, id);
+    }
+    return id;
+  } catch (err) {
+    return '';
+  }
+}
+
+function trackVisit() {
+  if (!isConfigured() || isOwnerDevice()) return;
+  const vid = getOrCreateVisitorId();
+  const url = `${CALENDAR_CONFIG.webAppUrl}?visit=1&vid=${encodeURIComponent(vid)}&_=${Date.now()}`;
+  fetch(url, { cache: 'no-store' }).catch(() => { /* не критично — просто не досчитается один визит */ });
+}
+
 function processAndRenderMonth(rows, monthKey, monthNum, guessedYear) {
   const byDate = groupRowsByDate(rows);
   let year = guessedYear;
@@ -1194,6 +1234,9 @@ function closeModal() {
 }
 
 function init() {
+  applyOwnerFlagFromUrl();
+  trackVisit();
+
   els.title = document.getElementById('cal-title');
   els.nav = document.getElementById('cal-nav');
   els.panel = document.getElementById('cal-panel');
