@@ -888,7 +888,7 @@ function renderEventCell(key, events, isUnseen) {
   const cell = els.grid.querySelector(`[data-date="${key}"]`);
   if (!cell) return;
 
-  cell.querySelectorAll('.cal-dots, .cal-participation, .cal-count').forEach((el) => el.remove());
+  cell.querySelectorAll('.cal-dots, .cal-count').forEach((el) => el.remove());
 
   cell.classList.add('has-event');
   cell.classList.toggle('has-important', events.some((e) => e.important));
@@ -902,9 +902,8 @@ function renderEventCell(key, events, isUnseen) {
     // «тут что-то новое» — и вернутся сами, как только день откроют.
     cell.style.background = '#E23B3B';
   } else {
-    // Фон ячейки красится цветом категории «Вид мероприятия» — если за
-    // день несколько разных категорий, фон делится на равные диагональные
-    // полосы (как раньше делился зелёный/красный по «Участию»).
+    // Точки категории «Вид мероприятия» в углу — видны всегда, независимо
+    // от того, что красит фон ниже.
     const kindColors = [];
     const seenKinds = new Set();
     for (const e of events) {
@@ -914,9 +913,23 @@ function renderEventCell(key, events, isUnseen) {
       }
     }
     if (!kindColors.length) kindColors.push('#8892A6');
-    cell.style.background = kindColors.length === 1
-      ? tintWithWhite(kindColors[0], 0.82)
-      : `linear-gradient(135deg, ${kindColors.map((c, i) => `${tintWithWhite(c, 0.82)} ${(i / kindColors.length) * 100}% ${((i + 1) / kindColors.length) * 100}%`).join(', ')})`;
+
+    // «Участие» красит всю ячейку — Да зелёным, Нет красным (пополам по
+    // диагонали, если за день есть и то, и другое) — это важнее для
+    // быстрого взгляда «идём или нет», чем категория, поэтому и забирает
+    // фон себе. Категория никуда не делась — она всё ещё видна точками в
+    // углу. Нет ни одного мероприятия с проставленным «Участие» — фон,
+    // как и раньше, красится цветом категории.
+    const hasDa = events.some((e) => e.participation === 'Да');
+    const hasNet = events.some((e) => e.participation === 'Нет');
+    const partColors = [];
+    if (hasDa) partColors.push('#2F9E56');
+    if (hasNet) partColors.push('#D64545');
+
+    const bgColors = partColors.length ? partColors : kindColors;
+    cell.style.background = bgColors.length === 1
+      ? tintWithWhite(bgColors[0], 0.8)
+      : `linear-gradient(135deg, ${bgColors.map((c, i) => `${tintWithWhite(c, 0.8)} ${(i / bgColors.length) * 100}% ${((i + 1) / bgColors.length) * 100}%`).join(', ')})`;
 
     const dots = document.createElement('div');
     dots.className = 'cal-dots';
@@ -927,26 +940,6 @@ function renderEventCell(key, events, isUnseen) {
       dots.appendChild(dot);
     }
     cell.appendChild(dots);
-
-    // «Участие» (Да/Нет) — отдельные точки снизу слева, чтобы не спорить
-    // за фон ячейки с цветом категории.
-    const hasDa = events.some((e) => e.participation === 'Да');
-    const hasNet = events.some((e) => e.participation === 'Нет');
-    if (hasDa || hasNet) {
-      const marks = document.createElement('div');
-      marks.className = 'cal-participation';
-      if (hasDa) {
-        const dot = document.createElement('span');
-        dot.className = 'cal-participation-dot cal-participation-dot--yes';
-        marks.appendChild(dot);
-      }
-      if (hasNet) {
-        const dot = document.createElement('span');
-        dot.className = 'cal-participation-dot cal-participation-dot--no';
-        marks.appendChild(dot);
-      }
-      cell.appendChild(marks);
-    }
 
     if (events.length > 1) {
       const count = document.createElement('span');

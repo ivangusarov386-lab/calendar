@@ -715,10 +715,9 @@ body::after {
 .cal-cell.has-important.has-unseen-event::after {
   color: #fff;
 }
-/* Подпись «Важно» занимает нижнюю полоску ячейки — сдвигаем точки
-   участия и счётчик количества мероприятий чуть выше, чтобы не спорить
-   с ней за одно и то же место. */
-.cal-cell.has-important .cal-participation,
+/* Подпись «Важно» занимает нижнюю полоску ячейки — сдвигаем счётчик
+   количества мероприятий чуть выше, чтобы не спорить с ней за одно и то
+   же место. */
 .cal-cell.has-important .cal-count {
   bottom: 18px;
 }
@@ -756,24 +755,6 @@ body::after {
   background: #E23B3B;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
 }
-
-/* «Участие» (Да/Нет) — компактные точки снизу слева, отдельно от цвета
-   категории, который теперь занимает фон ячейки. */
-.cal-participation {
-  position: absolute;
-  bottom: 8px;
-  left: 9px;
-  display: flex;
-  gap: 3px;
-}
-.cal-participation-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
-}
-.cal-participation-dot--yes { background: #2F9E56; }
-.cal-participation-dot--no { background: #D64545; }
 
 .cal-count {
   position: absolute;
