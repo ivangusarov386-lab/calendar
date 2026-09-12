@@ -817,6 +817,34 @@ body::after {
   box-shadow: 0 0 0 3px rgba(87, 209, 138, 0.2);
 }
 
+/* Кнопка-исключение из счётчика заходов — намеренно неброская (это для
+   владельца сайта, не для родителей/детей): мелкий приглушённый текст
+   под футером, без рамок/фона, пока не наведёшь курсор. :not([hidden]) —
+   иначе unconditional display переопределит браузерное [hidden]{display:
+   none} и кнопка останется видна даже со скрытым атрибутом (см. историю
+   багов с .modal-overlay/.cal-nav и т.п. в этом же файле). */
+.owner-exclude-btn:not([hidden]) { display: block; }
+.owner-exclude-btn {
+  margin: 10px auto 0;
+  padding: 4px 10px;
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+  opacity: 0.6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.owner-exclude-btn:hover { opacity: 1; }
+.owner-excluded-note {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+  opacity: 0.6;
+}
+
 /* ---------- Modal ---------- */
 
 .modal-overlay {

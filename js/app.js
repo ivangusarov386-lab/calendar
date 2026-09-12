@@ -344,6 +344,23 @@ function isOwnerDevice() {
   try { return localStorage.getItem(OWNER_FLAG_KEY) === '1'; } catch (err) { return false; }
 }
 
+function setOwnerDevice() {
+  try { localStorage.setItem(OWNER_FLAG_KEY, '1'); } catch (err) { /* приватный режим — не критично */ }
+  renderOwnerExcludeUi();
+}
+
+// Кнопка на самой странице — основной способ исключить себя из счётчика.
+// Ссылка «?owner=1» тоже по-прежнему работает, но в установленном на
+// экран приложении (PWA) адресной строки нет вообще, вписать туда
+// параметр просто негде — а кнопка на странице работает одинаково и там,
+// и в обычном браузере.
+function renderOwnerExcludeUi() {
+  if (!els.ownerExcludeBtn || !els.ownerExcludedNote) return;
+  const owner = isOwnerDevice();
+  els.ownerExcludeBtn.hidden = owner;
+  els.ownerExcludedNote.hidden = !owner;
+}
+
 function getOrCreateVisitorId() {
   try {
     let id = localStorage.getItem(VISITOR_ID_KEY);
@@ -1285,10 +1302,13 @@ function init() {
   els.badgeBanner = document.getElementById('badge-permission-banner');
   els.badgePermissionBtn = document.getElementById('badge-permission-btn');
   els.badgePermissionDismiss = document.getElementById('badge-permission-dismiss');
+  els.ownerExcludeBtn = document.getElementById('owner-exclude-btn');
+  els.ownerExcludedNote = document.getElementById('owner-excluded-note');
 
   updateEventsBadge(); // восстановить точки/значок иконки из прошлого сеанса
   updateScheduleBadge();
   maybeShowBadgePermissionPrompt();
+  renderOwnerExcludeUi();
 
   if (els.badgePermissionBtn) {
     els.badgePermissionBtn.addEventListener('click', async () => {
@@ -1299,6 +1319,9 @@ function init() {
   }
   if (els.badgePermissionDismiss) {
     els.badgePermissionDismiss.addEventListener('click', dismissBadgePermissionPrompt);
+  }
+  if (els.ownerExcludeBtn) {
+    els.ownerExcludeBtn.addEventListener('click', setOwnerDevice);
   }
 
   for (const wd of WEEKDAYS) {
