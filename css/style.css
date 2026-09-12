@@ -664,17 +664,19 @@ body::after {
   outline-offset: 2px;
 }
 
-/* Новое/изменённое мероприятие («есть обновление» — см. js/app.js,
-   diffAndTrackUpdates) — раньше была только маленькая точка в углу,
-   теперь вся ячейка кричит об этом: сплошной красный фон (инлайн-стилем
-   в JS, чтобы точно перекрыть обычный цвет категории), жирная белая
-   дата и восклицательный знак через ::before. Пропадает сразу же, как
-   день открыли (см. acknowledgeDateSeen → renderEventCell). */
-.cal-cell.has-unseen-event .cal-daynum {
+/* «Тревожный» вид — либо мероприятие новое/изменённое («есть
+   обновление» — см. js/app.js, diffAndTrackUpdates), либо оно сегодня
+   или в будущем (исход по нему ещё не известен — см. renderEventCell).
+   Сплошной красный фон (инлайн-стилем в JS, чтобы точно перекрыть обычный
+   цвет категории/участия), жирная белая дата и восклицательный знак
+   через ::before. Для «нового» пропадает сразу же, как день открыли
+   (см. acknowledgeDateSeen → renderEventCell); для «в будущем» — сам,
+   как только день станет прошедшим. */
+.cal-cell.is-alert .cal-daynum {
   color: #fff;
   font-weight: 800;
 }
-.cal-cell.has-unseen-event::before {
+.cal-cell.is-alert::before {
   content: '!';
   position: absolute;
   top: 4px;
@@ -693,7 +695,7 @@ body::after {
    без этого перенос текста на две строки в узкой ячейке на iPhone
    раздувает высоту всей строки сетки (это реальный баг Safari, не
    гипотетический — см. историю правок). Когда ячейка и так красная
-   (has-unseen-event), красный текст потерялся бы — тогда белый. */
+   (is-alert), красный текст потерялся бы — тогда белый. */
 .cal-cell.has-important::after {
   content: 'Важно';
   position: absolute;
@@ -712,7 +714,7 @@ body::after {
   color: var(--red-ink);
   pointer-events: none;
 }
-.cal-cell.has-important.has-unseen-event::after {
+.cal-cell.has-important.is-alert::after {
   color: #fff;
 }
 /* Подпись «Важно» занимает нижнюю полоску ячейки — сдвигаем счётчик

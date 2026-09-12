@@ -123,6 +123,19 @@ async function fetchScheduleRows() {
   return json.rows; // null, если лист «расписание» ещё не создан
 }
 
+// Приводит «Участие» к одному из двух канонических видов — 'Да'/'Нет' — не
+// разбирая по всему коду, что в ячейке реально написали: «да», «Да »,
+// «ДА» и т.п. считаются одним и тем же. Без этого сравнение строго с
+// 'Да' (с большой буквы) молча не срабатывает на реальных данных таблицы,
+// где участие часто вписано строчными буквами, — и зелёный/жёлтый цвет
+// после этого просто никогда не появляется.
+function normalizeParticipation(value) {
+  const v = (value || '').trim().toLowerCase();
+  if (v === 'да') return 'Да';
+  if (v === 'нет') return 'Нет';
+  return '';
+}
+
 // Строки существуют на каждый день месяца заранее — мероприятие определяем
 // по непустому полю "Мероприятие", а не по факту существования строки (см. ТЗ п.2).
 function groupRowsByDate(rows) {
@@ -138,7 +151,7 @@ function groupRowsByDate(rows) {
       kind: (kind || '').trim(),
       title: title.trim(),
       address: (address || '').trim(),
-      participation: (participation || '').trim(),
+      participation: normalizeParticipation(participation),
       important: (importantRaw || '').trim().toLowerCase() === 'важно',
     });
   }
@@ -932,14 +945,22 @@ function renderEventCell(key, events, isUnseen) {
 
   cell.classList.add('has-event');
   cell.classList.toggle('has-important', events.some((e) => e.important));
-  cell.classList.toggle('has-unseen-event', isUnseen);
 
-  if (isUnseen) {
-    // Новое/изменённое мероприятие — специально бросается в глаза целиком
-    // (сплошной красный фон, жирная дата, восклицательный знак через CSS
-    // ::before у .has-unseen-event), а не мелкой точкой в углу. Обычные
-    // цвета категории/точки участия только отвлекали бы от главного —
-    // «тут что-то новое» — и вернутся сами, как только день откроют.
+  // «Тревожный» вид (сплошной красный фон, жирная белая дата,
+  // восклицательный знак — см. .is-alert в CSS) — либо мероприятие новое/
+  // изменённое и его ещё не видели, либо оно сегодня/в будущем и исход
+  // ещё не известен. И то и другое одинаково «требует внимания сейчас»,
+  // поэтому выглядит одинаково — специально просили сделать будущие дни
+  // такими же, как уже готовая подсветка «новое».
+  const todayKeyForCell = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  const isFutureOrToday = dateKeyToNum(key) >= dateKeyToNum(todayKeyForCell);
+  const isAlert = isUnseen || isFutureOrToday;
+  cell.classList.toggle('is-alert', isAlert);
+
+  if (isAlert) {
+    // Обычные цвета категории/участия только отвлекали бы от главного —
+    // и вернутся сами, как только день станет прошедшим (или его откроют,
+    // если он был именно «новым»).
     cell.style.background = '#E23B3B';
   } else {
     // Точки категории «Вид мероприятия» в углу — видны всегда, независимо
@@ -954,28 +975,17 @@ function renderEventCell(key, events, isUnseen) {
     }
     if (!kindColors.length) kindColors.push('#8892A6');
 
-    // Фон ячейки красится по времени + «Участию»: все будущие мероприятия
-    // (сегодняшнее считаем ещё не прошедшим) — красным, независимо от
-    // «Участия» — итог там ещё не определился. Для уже прошедших —
-    // «Участие» решает: Да зелёным, Нет жёлтым (пополам по диагонали,
-    // если за день есть и то, и другое). Категория никуда не делась —
-    // она всё ещё видна точками в углу. Ни одного мероприятия с
-    // проставленным «Участие» в прошедший день — фон, как и раньше,
+    // Прошедший день — фон решает «Участие»: Да зелёным, Нет жёлтым
+    // (пополам по диагонали, если за день есть и то, и другое). Ни у
+    // одного мероприятия «Участие» не проставлено — фон, как и раньше,
     // красится цветом категории.
-    const todayKeyForCell = formatDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
-    const isFutureOrToday = dateKeyToNum(key) >= dateKeyToNum(todayKeyForCell);
+    const hasDa = events.some((e) => e.participation === 'Да');
+    const hasNet = events.some((e) => e.participation === 'Нет');
+    const partColors = [];
+    if (hasDa) partColors.push('#2F9E56');
+    if (hasNet) partColors.push('#D6A400');
+    const bgColors = partColors.length ? partColors : kindColors;
 
-    let bgColors;
-    if (isFutureOrToday) {
-      bgColors = ['#D64545'];
-    } else {
-      const hasDa = events.some((e) => e.participation === 'Да');
-      const hasNet = events.some((e) => e.participation === 'Нет');
-      const partColors = [];
-      if (hasDa) partColors.push('#2F9E56');
-      if (hasNet) partColors.push('#D6A400');
-      bgColors = partColors.length ? partColors : kindColors;
-    }
     cell.style.background = bgColors.length === 1
       ? tintWithWhite(bgColors[0], 0.8)
       : `linear-gradient(135deg, ${bgColors.map((c, i) => `${tintWithWhite(c, 0.8)} ${(i / bgColors.length) * 100}% ${((i + 1) / bgColors.length) * 100}%`).join(', ')})`;
