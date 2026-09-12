@@ -425,6 +425,10 @@ body::after {
   background: #E23B3B;
   flex-shrink: 0;
 }
+.list-day__badge--important {
+  color: #fff;
+  background: var(--red-ink);
+}
 .list-day__events {
   display: flex;
   flex-direction: column;
@@ -660,6 +664,65 @@ body::after {
   outline-offset: 2px;
 }
 
+/* Новое/изменённое мероприятие («есть обновление» — см. js/app.js,
+   diffAndTrackUpdates) — раньше была только маленькая точка в углу,
+   теперь вся ячейка кричит об этом: сплошной красный фон (инлайн-стилем
+   в JS, чтобы точно перекрыть обычный цвет категории), жирная белая
+   дата и восклицательный знак через ::before. Пропадает сразу же, как
+   день открыли (см. acknowledgeDateSeen → renderEventCell). */
+.cal-cell.has-unseen-event .cal-daynum {
+  color: #fff;
+  font-weight: 800;
+}
+.cal-cell.has-unseen-event::before {
+  content: '!';
+  position: absolute;
+  top: 4px;
+  right: 9px;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Пометка «Важно» (7-й столбец на листе месяца) — красная подпись внизу
+   ячейки. Через ::after, а не обычный элемент (та же логика, что и для
+   значка каникул выше) — сам появляется/исчезает с классом has-important.
+   nowrap + фиксированная высота — тот же приём, что и для «Каникулы»:
+   без этого перенос текста на две строки в узкой ячейке на iPhone
+   раздувает высоту всей строки сетки (это реальный баг Safari, не
+   гипотетический — см. историю правок). Когда ячейка и так красная
+   (has-unseen-event), красный текст потерялся бы — тогда белый. */
+.cal-cell.has-important::after {
+  content: 'Важно';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 4px;
+  height: 12px;
+  line-height: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--red-ink);
+  pointer-events: none;
+}
+.cal-cell.has-important.has-unseen-event::after {
+  color: #fff;
+}
+/* Подпись «Важно» занимает нижнюю полоску ячейки — сдвигаем точки
+   участия и счётчик количества мероприятий чуть выше, чтобы не спорить
+   с ней за одно и то же место. */
+.cal-cell.has-important .cal-participation,
+.cal-cell.has-important .cal-count {
+  bottom: 18px;
+}
+
 /* Фон ячейки с мероприятием красится инлайн-стилем в JS (цвет самой
    категории «Вид мероприятия» — см. applyEventsToGrid в js/app.js).
    Точки в углу — те же цвета, для точной идентификации, если категорий
@@ -845,6 +908,18 @@ body::after {
   letter-spacing: 0.02em;
   padding: 3px 10px;
   border-radius: 999px;
+  margin-bottom: 10px;
+}
+.event-important-badge {
+  display: inline-block;
+  color: #fff;
+  background: var(--red-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 6px;
   margin-bottom: 10px;
 }
 

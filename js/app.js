@@ -128,7 +128,7 @@ async function fetchScheduleRows() {
 function groupRowsByDate(rows) {
   const byDate = new Map();
   for (const row of rows) {
-    const [dateStr, time, kind, title, address, participation] = row;
+    const [dateStr, time, kind, title, address, participation, importantRaw] = row;
     if (!dateStr) continue;
     const hasEvent = !!(title && title.trim());
     if (!hasEvent) continue;
@@ -139,6 +139,7 @@ function groupRowsByDate(rows) {
       title: title.trim(),
       address: (address || '').trim(),
       participation: (participation || '').trim(),
+      important: (importantRaw || '').trim().toLowerCase() === 'важно',
     });
   }
   return byDate;
@@ -156,7 +157,7 @@ const SEEN_SIGNATURES_KEY = 'calendarSeenEventSignatures';
 const UNSEEN_DATES_KEY = 'calendarUnseenDates';
 
 function eventsSignature(events) {
-  return JSON.stringify(events.map((e) => [e.time, e.kind, e.title, e.address, e.participation]));
+  return JSON.stringify(events.map((e) => [e.time, e.kind, e.title, e.address, e.participation, e.important]));
 }
 
 function loadJsonFromStorage(key, fallback) {
@@ -256,8 +257,11 @@ function acknowledgeDateSeen(dateKey) {
   saveJsonToStorage(UNSEEN_DATES_KEY, [...unseen]);
   updateEventsBadge(unseen);
 
-  const cell = els.grid.querySelector(`[data-date="${dateKey}"] .cal-update-dot`);
-  if (cell) cell.remove();
+  // Честно перерисовать ячейку — красная плашка «новое» должна пропасть
+  // сразу же, а не ждать следующего полного рендера сетки.
+  const events = currentByDate.get(dateKey);
+  if (events) renderEventCell(dateKey, events, false);
+
   const listDot = els.list.querySelector(`[data-update-date="${dateKey}"]`);
   if (listDot) listDot.remove();
 }
@@ -281,6 +285,12 @@ const state = {
 };
 
 const els = {};
+
+// byDate текущего отрисованного месяца — нужен, чтобы acknowledgeDateSeen
+// мог честно перерисовать одну ячейку (снять красную плашку «новое»),
+// а не просто убрать точку и оставить старый фон/классы до следующего
+// полного рендера. Заполняется в applyEventsToGrid при каждом рендере.
+let currentByDate = new Map();
 
 // Кэш ответов Apps Script: monthNum -> rows (массив) или null («лист не
 // создан»). Хранится и в памяти (мгновенно при переключении месяцев в
@@ -862,21 +872,36 @@ function renderGridSkeleton(year, monthNum, monthKey) {
 // потом со свежими данными из сети) — поэтому сначала подчищает то, что
 // сама же добавила в прошлый раз, вместо того чтобы копить дубликаты.
 function applyEventsToGrid(byDate, unseen) {
+  currentByDate = byDate;
   for (const [key, events] of byDate.entries()) {
     if (!events.length) continue;
-    const cell = els.grid.querySelector(`[data-date="${key}"]`);
-    if (!cell) continue;
+    renderEventCell(key, events, !!(unseen && unseen.has(key)));
+  }
+}
 
-    cell.querySelectorAll('.cal-update-dot, .cal-dots, .cal-participation, .cal-count').forEach((el) => el.remove());
+// Отрисовка одной ячейки — вынесено из applyEventsToGrid, чтобы можно было
+// честно перерисовать конкретный день и после того, как его «посмотрели»
+// (см. acknowledgeDateSeen): красная плашка «новое» должна тут же
+// смениться на обычный цвет категории, а не ждать следующего полного
+// рендера сетки.
+function renderEventCell(key, events, isUnseen) {
+  const cell = els.grid.querySelector(`[data-date="${key}"]`);
+  if (!cell) return;
 
-    cell.classList.add('has-event');
+  cell.querySelectorAll('.cal-dots, .cal-participation, .cal-count').forEach((el) => el.remove());
 
-    if (unseen && unseen.has(key)) {
-      const updateDot = document.createElement('span');
-      updateDot.className = 'cal-update-dot';
-      cell.appendChild(updateDot);
-    }
+  cell.classList.add('has-event');
+  cell.classList.toggle('has-important', events.some((e) => e.important));
+  cell.classList.toggle('has-unseen-event', isUnseen);
 
+  if (isUnseen) {
+    // Новое/изменённое мероприятие — специально бросается в глаза целиком
+    // (сплошной красный фон, жирная дата, восклицательный знак через CSS
+    // ::before у .has-unseen-event), а не мелкой точкой в углу. Обычные
+    // цвета категории/точки участия только отвлекали бы от главного —
+    // «тут что-то новое» — и вернутся сами, как только день откроют.
+    cell.style.background = '#E23B3B';
+  } else {
     // Фон ячейки красится цветом категории «Вид мероприятия» — если за
     // день несколько разных категорий, фон делится на равные диагональные
     // полосы (как раньше делился зелёный/красный по «Участию»).
@@ -929,19 +954,19 @@ function applyEventsToGrid(byDate, unseen) {
       count.textContent = String(events.length);
       cell.appendChild(count);
     }
-
-    cell.tabIndex = 0;
-    cell.setAttribute('role', 'button');
-    // onclick/onkeydown (не addEventListener) — переприсваивание, а не
-    // накопление, при повторном вызове на той же ячейке.
-    cell.onclick = () => openModal(key, events);
-    cell.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openModal(key, events);
-      }
-    };
   }
+
+  cell.tabIndex = 0;
+  cell.setAttribute('role', 'button');
+  // onclick/onkeydown (не addEventListener) — переприсваивание, а не
+  // накопление, при повторном вызове на той же ячейке.
+  cell.onclick = () => openModal(key, events);
+  cell.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openModal(key, events);
+    }
+  };
 }
 
 function renderListPlaceholder(message) {
@@ -987,6 +1012,12 @@ function renderListView(byDate, year, monthNum, monthKey, unseen) {
       badge.className = 'list-day__badge';
       badge.textContent = 'Сегодня';
       header.appendChild(badge);
+    }
+    if (events.some((e) => e.important)) {
+      const importantBadge = document.createElement('span');
+      importantBadge.className = 'list-day__badge list-day__badge--important';
+      importantBadge.textContent = 'Важно';
+      header.appendChild(importantBadge);
     }
     group.appendChild(header);
 
@@ -1121,6 +1152,13 @@ function openModal(dateKey, events) {
     badge.textContent = e.kind || 'Мероприятие';
     badge.style.background = colorForCategory(e.kind);
     card.appendChild(badge);
+
+    if (e.important) {
+      const importantBadge = document.createElement('span');
+      importantBadge.className = 'event-important-badge';
+      importantBadge.textContent = 'Важно';
+      card.appendChild(importantBadge);
+    }
 
     const title = document.createElement('h3');
     title.textContent = e.title;

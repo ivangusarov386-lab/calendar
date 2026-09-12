@@ -29,7 +29,11 @@ const MONTH_NAMES_RU = [
   'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
 ];
 
-const HEADERS = ['Дата', 'Время', 'Вид мероприятия', 'Мероприятие', 'Адрес', 'Участие'];
+// «Важно» (7-й столбец) — необязательная пометка мероприятия, добавляете
+// сами (например, через своё правило проверки данных на листе месяца).
+// Сайт (js/app.js) считает мероприятие важным, если тут стоит слово
+// «Важно» (без учёта регистра) — пусто или что-то другое пометку не ставит.
+const HEADERS = ['Дата', 'Время', 'Вид мероприятия', 'Мероприятие', 'Адрес', 'Участие', 'Важно'];
 
 // Список категорий мероприятий для выпадающего списка в столбце «Вид
 // мероприятия». Отредактируйте под реальные категории класса — сайт
@@ -307,7 +311,7 @@ function createMonthSheet(monthNum, year) {
   for (let d = 1; d <= daysInMonth; d++) {
     const dd = String(d).padStart(2, '0');
     const mm = String(monthNum).padStart(2, '0');
-    rows.push([`${dd}.${mm}.${year}`, '', '', '', '', '']);
+    rows.push([`${dd}.${mm}.${year}`, '', '', '', '', '', '']);
   }
   sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
 
@@ -317,6 +321,7 @@ function createMonthSheet(monthNum, year) {
   sheet.setColumnWidth(4, 220);
   sheet.setColumnWidth(5, 200);
   sheet.setColumnWidth(6, 80);
+  sheet.setColumnWidth(7, 90);
 
   applyValidation(sheet, rows.length);
 
