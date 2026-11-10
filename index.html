@@ -18,7 +18,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=31">
+<link rel="stylesheet" href="css/style.css?v=32">
 <!-- Шрифты подключены неблокирующе (preload + swap), чтобы медленная загрузка
      Google Fonts не задерживала выполнение скриптов ниже по странице. -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital@1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -129,9 +129,10 @@
   <section class="cal-panel olympiads-panel" id="olympiads-panel" aria-labelledby="olympiads-title" hidden>
     <h1 id="olympiads-title">Олимпиады</h1>
     <p>Муниципальный этап ВсОШ · 9 класс · 2026/2027</p>
-    <p>33 мероприятия с участием 9 класса. Время московское.</p>
+    <p id="olympiads-count">33 мероприятия с участием 9 класса. Время московское.</p>
+    <p id="olympiads-status" role="status">Данные из Excel. Ожидается обновление из Google Таблицы.</p>
     <div class="olympiads-scroll"><table class="olympiads-table"><thead><tr><th scope="col">Дата проведения</th><th scope="col">Предмет</th><th scope="col">Время начала</th><th scope="col">Классы участия</th></tr></thead><tbody id="olympiads-rows"></tbody></table></div>
-    <p class="olympiads-source">Источник: Приложение 2 к приказу ДОНМ от 07.10.2026 № Пр-806. Данные из предоставленного Excel.</p>
+    <p class="olympiads-source">Источник: Приложение 2 к приказу ДОНМ от 07.10.2026 № Пр-806.</p>
   </section>
 
   <footer class="cal-footer">
@@ -156,7 +157,7 @@
 </div>
 
 <script src="js/config.js?v=30"></script>
-<script src="js/olympiads-data.js?v=31"></script>
-<script src="js/app.js?v=31"></script>
+<script src="js/olympiads-data.js?v=32"></script>
+<script src="js/app.js?v=32"></script>
 </body>
 </html>

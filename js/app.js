@@ -875,6 +875,55 @@ function renderScheduleDay() {
   els.schedulePanel.appendChild(wrap);
 }
 
+function renderOlympiadsRows(rows) {
+  const tbody = document.getElementById('olympiads-rows');
+  tbody.replaceChildren();
+  rows.filter((row) => String(row[1] || '').trim()).forEach((row) => {
+    const tr = document.createElement('tr');
+    for (let index = 0; index < 4; index++) {
+      const td = document.createElement('td');
+      td.dataset.label = ['Дата проведения', 'Предмет', 'Время начала', 'Классы участия'][index];
+      td.textContent = row[index] || '';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+  document.getElementById('olympiads-count').textContent = `Мероприятий с участием 9 класса: ${tbody.children.length}. Время московское.`;
+}
+
+let olympiadsLoading = false;
+async function loadOlympiads() {
+  if (olympiadsLoading) return;
+  const status = document.getElementById('olympiads-status');
+  if (!isConfigured()) {
+    status.textContent = 'Показаны данные из Excel. Ссылка на Apps Script не настроена.';
+    return;
+  }
+  olympiadsLoading = true;
+  status.textContent = 'Обновление из Google Таблицы…';
+  try {
+    const url = new URL(CALENDAR_CONFIG.webAppUrl);
+    url.searchParams.set('olympiads', '1');
+    url.searchParams.set('_', Date.now());
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const json = await response.json();
+    if (json.error) throw new Error(json.error);
+    if (json.rows === null) {
+      renderOlympiadsRows([]);
+      status.textContent = 'Лист «Олимпиады» ещё не создан в Google Таблице.';
+    } else {
+      if (!Array.isArray(json.rows) || !json.rows.every(Array.isArray)) throw new Error('Invalid rows');
+      renderOlympiadsRows(json.rows);
+      status.textContent = json.rows.length ? 'Данные обновлены из Google Таблицы.' : 'В листе «Олимпиады» пока нет мероприятий.';
+    }
+  } catch (err) {
+    status.textContent = 'Не удалось обновить данные. Показана последняя загруженная версия (при первом открытии — из Excel). Проверьте развёртывание Apps Script.';
+  } finally {
+    olympiadsLoading = false;
+  }
+}
+
 function switchSection(section) {
   state.section = section;
   document.body.dataset.section = section;
@@ -902,6 +951,7 @@ function switchSection(section) {
   document.querySelector('.cal-footer').hidden = section === 'olympiads';
   els.banner.hidden = true;
 
+  if (section === 'olympiads') loadOlympiads();
   if (section === 'schedule') {
     acknowledgeScheduleSeen();
     loadSchedule();
@@ -1344,11 +1394,7 @@ function init() {
   let savedSection = 'events';
   try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
   state.section = ['schedule', 'olympiads'].includes(savedSection) ? savedSection : 'events';
-  OLYMPIADS_ROWS.forEach((row) => {
-    const tr = document.createElement('tr');
-    row.forEach((value, index) => { const td = document.createElement('td'); td.dataset.label = ['Дата проведения', 'Предмет', 'Время начала', 'Классы участия'][index]; td.textContent = value; tr.appendChild(td); });
-    document.getElementById('olympiads-rows').appendChild(tr);
-  });
+  renderOlympiadsRows(OLYMPIADS_ROWS);
   document.getElementById('section-olympiads-btn').addEventListener('click', () => switchSection('olympiads'));
 
   let savedView = 'grid';
@@ -1405,6 +1451,7 @@ function init() {
   const AUTO_REFRESH_MS = 90 * 1000;
   function refreshCurrentSection() {
     if (state.section === 'events') loadAndRender();
+    else if (state.section === 'olympiads') loadOlympiads();
     else loadSchedule();
     loadVacations();
     loadSubstitutions();
