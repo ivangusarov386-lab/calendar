@@ -6,7 +6,7 @@
 // сюда не попадают вообще — они всегда идут напрямую в сеть, свежими, как
 // того требует ТЗ сайта; кэшируется только статика (HTML/CSS/JS/иконки).
 
-const CACHE_NAME = 'calendar-shell-v1';
+const CACHE_NAME = 'calendar-shell-v2';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

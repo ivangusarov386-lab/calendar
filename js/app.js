@@ -877,26 +877,32 @@ function renderScheduleDay() {
 
 function switchSection(section) {
   state.section = section;
+  document.body.dataset.section = section;
   try { localStorage.setItem('calendarSection', section); } catch (err) { /* приватный режим — не критично */ }
 
   const isEvents = section === 'events';
 
   els.sectionEventsBtn.classList.toggle('is-active', isEvents);
   els.sectionEventsBtn.setAttribute('aria-selected', String(isEvents));
-  els.sectionScheduleBtn.classList.toggle('is-active', !isEvents);
-  els.sectionScheduleBtn.setAttribute('aria-selected', String(!isEvents));
+  els.sectionScheduleBtn.classList.toggle('is-active', section === 'schedule');
+  els.sectionScheduleBtn.setAttribute('aria-selected', String(section === 'schedule'));
 
   els.nav.hidden = !isEvents;
   els.eventsViewSwitch.hidden = !isEvents;
   els.legend.hidden = !isEvents;
   els.panel.hidden = !(isEvents && state.view === 'grid');
   els.list.hidden = !(isEvents && state.view === 'list');
-  els.scheduleNav.hidden = isEvents;
-  els.schedulePanel.hidden = isEvents;
+  els.scheduleNav.hidden = section !== 'schedule';
+  els.schedulePanel.hidden = section !== 'schedule';
 
+  const olympiadsButton = document.getElementById('section-olympiads-btn');
+  olympiadsButton.classList.toggle('is-active', section === 'olympiads');
+  olympiadsButton.setAttribute('aria-selected', String(section === 'olympiads'));
+  document.getElementById('olympiads-panel').hidden = section !== 'olympiads';
+  document.querySelector('.cal-footer').hidden = section === 'olympiads';
   els.banner.hidden = true;
 
-  if (!isEvents) {
+  if (section === 'schedule') {
     acknowledgeScheduleSeen();
     loadSchedule();
   }
@@ -1337,7 +1343,13 @@ function init() {
 
   let savedSection = 'events';
   try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
-  state.section = savedSection === 'schedule' ? 'schedule' : 'events';
+  state.section = ['schedule', 'olympiads'].includes(savedSection) ? savedSection : 'events';
+  OLYMPIADS_ROWS.forEach((row) => {
+    const tr = document.createElement('tr');
+    row.forEach((value, index) => { const td = document.createElement('td'); td.dataset.label = ['Дата проведения', 'Предмет', 'Время начала', 'Классы участия'][index]; td.textContent = value; tr.appendChild(td); });
+    document.getElementById('olympiads-rows').appendChild(tr);
+  });
+  document.getElementById('section-olympiads-btn').addEventListener('click', () => switchSection('olympiads'));
 
   let savedView = 'grid';
   try { savedView = localStorage.getItem('calendarView') || 'grid'; } catch (err) { /* приватный режим — не критично */ }
