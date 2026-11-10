@@ -1039,8 +1039,6 @@ function renderStadgradMonth() {
       addText('list-event__kind', row[5]);
       addText('list-event__title', row[2]);
       addText('stadgrad-event__work', row[4]);
-      addText('stadgrad-event__meta', row[6] ? `Группы: ${row[6]}` : '');
-      addText('stadgrad-event__meta', row[7]);
       events.appendChild(event);
     });
     group.appendChild(events);
