@@ -875,20 +875,78 @@ function renderScheduleDay() {
   els.schedulePanel.appendChild(wrap);
 }
 
+let olympiadsRows = [];
+const olympiadsMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
 function renderOlympiadsRows(rows) {
-  const tbody = document.getElementById('olympiads-rows');
-  tbody.replaceChildren();
-  rows.filter((row) => String(row[1] || '').trim()).forEach((row) => {
-    const tr = document.createElement('tr');
-    for (let index = 0; index < 4; index++) {
-      const td = document.createElement('td');
-      td.dataset.label = ['Дата проведения', 'Предмет', 'Время начала', 'Классы участия'][index];
-      td.textContent = row[index] || '';
-      tr.appendChild(td);
-    }
-    tbody.appendChild(tr);
+  olympiadsRows = rows;
+  renderOlympiadsMonth();
+}
+
+function renderOlympiadsMonth() {
+  const year = olympiadsMonth.getFullYear();
+  const month = olympiadsMonth.getMonth();
+  const monthKey = Object.keys(MONTH_NUM).find((key) => MONTH_NUM[key] === month + 1);
+  document.getElementById('olympiads-title').textContent = `${MONTH_TITLE[monthKey]} ${year}`;
+  const list = document.getElementById('olympiads-list');
+  list.replaceChildren();
+  const byDay = new Map();
+  olympiadsRows.forEach((row) => {
+    const match = String(row[0] || '').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!match || !String(row[1] || '').trim()) return;
+    const day = Number(match[1]);
+    const date = new Date(Number(match[3]), Number(match[2]) - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(row);
   });
-  document.getElementById('olympiads-count').textContent = `Мероприятий с участием 9 класса: ${tbody.children.length}. Время московское.`;
+  const now = new Date();
+  [...byDay.keys()].sort((a, b) => a - b).forEach((day) => {
+    const group = document.createElement('div');
+    group.className = 'list-day';
+    const header = document.createElement('div');
+    header.className = 'list-day__header';
+    const weekday = WEEKDAYS[(new Date(year, month, day).getDay() + 6) % 7];
+    header.textContent = `${weekday}, ${day} ${MONTH_GENITIVE[monthKey]}`;
+    if (year === now.getFullYear() && month === now.getMonth() && day === now.getDate()) {
+      group.classList.add('is-today');
+      const badge = document.createElement('span');
+      badge.className = 'list-day__badge';
+      badge.textContent = 'Сегодня';
+      header.appendChild(badge);
+    }
+    group.appendChild(header);
+    const events = document.createElement('div');
+    events.className = 'list-day__events';
+    // Стабильная сортировка оставляет порядок листа при одинаковом времени.
+    const minutes = (time) => {
+      const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : Infinity;
+    };
+    byDay.get(day).slice().sort((a, b) => minutes(a[2]) - minutes(b[2])).forEach((row) => {
+      const event = document.createElement('div');
+      event.className = 'list-event olympiad-event';
+      const time = document.createElement('span');
+      time.className = 'list-event__time';
+      time.textContent = row[2] || '—';
+      const kind = document.createElement('span');
+      kind.className = 'list-event__kind';
+      kind.textContent = row[3] ? `Классы: ${row[3]}` : 'Олимпиада';
+      const title = document.createElement('span');
+      title.className = 'list-event__title';
+      title.textContent = row[1];
+      event.append(time, kind, title);
+      events.appendChild(event);
+    });
+    group.appendChild(events);
+    list.appendChild(group);
+  });
+  if (!byDay.size) {
+    const empty = document.createElement('p');
+    empty.className = 'list-empty';
+    empty.textContent = 'В этом месяце пока нет олимпиад.';
+    list.appendChild(empty);
+  }
 }
 
 let olympiadsLoading = false;
@@ -948,10 +1006,11 @@ function switchSection(section) {
   olympiadsButton.classList.toggle('is-active', section === 'olympiads');
   olympiadsButton.setAttribute('aria-selected', String(section === 'olympiads'));
   document.getElementById('olympiads-panel').hidden = section !== 'olympiads';
+  document.getElementById('olympiads-nav').hidden = section !== 'olympiads';
   document.querySelector('.cal-footer').hidden = section === 'olympiads';
   els.banner.hidden = true;
 
-  if (section === 'olympiads') loadOlympiads();
+  if (section === 'olympiads') { renderOlympiadsMonth(); loadOlympiads(); }
   if (section === 'schedule') {
     acknowledgeScheduleSeen();
     loadSchedule();
@@ -1395,6 +1454,12 @@ function init() {
   try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
   state.section = ['schedule', 'olympiads'].includes(savedSection) ? savedSection : 'events';
   renderOlympiadsRows(OLYMPIADS_ROWS);
+  [['olympiads-prev', -1], ['olympiads-next', 1]].forEach(([id, step]) => {
+    document.getElementById(id).addEventListener('click', () => {
+      olympiadsMonth.setMonth(olympiadsMonth.getMonth() + step);
+      renderOlympiadsMonth();
+    });
+  });
   document.getElementById('section-olympiads-btn').addEventListener('click', () => switchSection('olympiads'));
 
   let savedView = 'grid';

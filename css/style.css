@@ -980,25 +980,12 @@ body::after {
   .lesson-row__top { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
 
-/* Олимпиады: расписание из исходного листа. */
+/* Олимпиады используют те же карточки и навигацию, что список календаря. */
 #section-switch { flex-wrap: wrap; }
-.olympiads-panel { padding: clamp(16px, 3vw, 32px); }
-.olympiads-panel h1 { margin-top: 0; }
-.olympiads-scroll { overflow-x: auto; margin-top: 24px; }
-.olympiads-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-.olympiads-table th, .olympiads-table td { padding: 14px 10px; border-bottom: 1px solid #d4dae5; vertical-align: top; }
-.olympiads-table th { background: #edf1f8; color: #172341; }
-.olympiads-table td:first-child, .olympiads-table td:nth-child(3) { white-space: nowrap; }
-.olympiads-source { font-size: 12px; line-height: 1.6; margin-top: 24px; }
-@media(max-width: 600px) { .olympiads-table { min-width: 560px; } }
-
 body[data-section="olympiads"] #cal-banner,
 .cal-footer[hidden] { display: none; }
-@media (max-width: 600px) {
- .olympiads-table { min-width: 0; }
- .olympiads-table thead { display: none; }
- .olympiads-table, .olympiads-table tbody, .olympiads-table tr, .olympiads-table td { display: block; }
- .olympiads-table tr { padding: 12px 0; border-bottom: 1px solid #64708c; }
- .olympiads-table td { padding: 5px 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
- .olympiads-table td::before { content: attr(data-label) ": "; color: #aab8d5; font-size: 12px; }
-}
+.olympiads-note { color: var(--ink-muted); font-size: 0.75rem; line-height: 1.6; margin: 16px 4px; }
+.olympiad-event { flex-wrap: wrap; cursor: default; --event-accent: #1aa6b7; }
+.olympiad-event:hover { transform: none; background: #fbfbfd; }
+.olympiad-event .list-event__kind { background: #1aa6b7; }
+.olympiad-event .list-event__title { flex-basis: 100%; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
