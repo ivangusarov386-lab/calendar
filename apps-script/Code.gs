@@ -70,6 +70,7 @@ function jsonResponse(obj) {
 //   с цифрами такой проблемы нет.
 // - GET {URL}?schedule=1 — расписание уроков.
 // - GET {URL}?olympiads=1 — олимпиады: A5:D, заголовки в строке 4.
+// - GET {URL}?stadgrad=1 — пробники СтадГрад: A4:H, заголовки в строке 3.
 // - GET {URL}?vacations=1 — периоды каникул.
 // - GET {URL}?substitutions=1 — замены на конкретную дату.
 // - GET {URL}?visit=1&vid=... — счётчик заходов (см. logVisit ниже).
@@ -79,6 +80,10 @@ function jsonResponse(obj) {
 // Если нужный лист ещё не создан — { rows: null }.
 function doGet(e) {
   const params = (e && e.parameter) || {};
+
+  if (params.stadgrad) {
+    return jsonResponse(getStadgradRows());
+  }
 
   if (params.olympiads) {
     return jsonResponse(getOlympiadsRows());
@@ -353,6 +358,56 @@ function createOlympiadsSheet() {
   ui.alert('Лист «Олимпиады» создан. Данные доступны сайту после обновления развёртывания Web App.');
 }
 
+// Структура исходного Excel: название — A1:H1, заголовки — A3:H3,
+// данные — A4:H. Столбец B содержит дату в формате ДД.ММ.ГГГГ.
+const STADGRAD_SHEET_NAME = 'СтадГрад (пробник)';
+const STADGRAD_HEADERS = ['Месяц', 'Дата', 'Предмет', 'Класс', 'Вид работы', 'Формат', 'Группы', 'Примечание'];
+
+function getStadgradRows() {
+  const sheet = getCalendarSpreadsheet().getSheetByName(STADGRAD_SHEET_NAME);
+  if (!sheet) return { rows: null };
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow < 4 ? [] : sheet.getRange(4, 1, lastRow - 3, STADGRAD_HEADERS.length).getDisplayValues()
+    .filter(function(row) { return row[2].trim() !== ''; });
+  return { rows };
+}
+
+// Существующий лист, в том числе пользовательские правки, сохраняется.
+function createStadgradSheet() {
+  const ss = getCalendarSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  if (ss.getSheetByName(STADGRAD_SHEET_NAME)) {
+    ui.alert('Лист «СтадГрад (пробник)» уже существует. Данные сохранены без изменений.');
+    return;
+  }
+  const sheet = ss.insertSheet(STADGRAD_SHEET_NAME);
+  sheet.getRange('A1:H1').merge().setValue('План диагностик на 2026–2027 уч. г. · ЗИЛАРТ548');
+  sheet.getRange(3, 1, 1, STADGRAD_HEADERS.length).setValues([STADGRAD_HEADERS]).setFontWeight('bold').setBackground('#e5edf7');
+  const rows = [
+    ["окт", "21.10.2026", "география", "9", "Тренировочная работа №1", "СтГр", "1,2,7,8", "по графику учителя"],
+    ["окт", "23.10.2026", "литература", "9", "Тренировочная работа №1", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "05.11.2026", "обществознание", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "09.11.2026", "биология", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "11.11.2026", "русский язык", "9", "Тренировочная работа №1", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "12.11.2026", "английский язык", "9", "Тренировочная работа №1", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "24.11.2026", "русский язык", "9", "Подготовка к ОГЭ. Тематическая диагностика", "СтГр", "1,2,7,8", "по графику учителя"],
+    ["ноя", "25.11.2026", "химия", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["ноя", "27.11.2026", "история", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["дек", "01.12.2026", "математика", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["дек", "03.12.2026", "информатика", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["дек", "08.12.2026", "география", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "отчёт СМ"],
+    ["дек", "10.12.2026", "физика", "9", "Тренировочная работа №2", "СтГр", "1,2,7,8", "по графику учителя"],
+    ["дек", "14.12.2026", "обществознание", "9", "Тренировочная работа №3", "СтГр", "1,2,7,8", "по графику учителя"],
+    ["дек", "16.12.2026", "русский язык", "9", "Диагностическая работа № 1", "СтГр", "1,2,7,8", "по графику учителя"]
+  ];
+  sheet.getRange(4, 1, rows.length, STADGRAD_HEADERS.length).setNumberFormat('@').setValues(rows);
+  sheet.getRange(1, 1, rows.length + 3, STADGRAD_HEADERS.length).setWrap(true).setVerticalAlignment('middle');
+  sheet.setFrozenRows(3);
+  [90, 130, 180, 90, 350, 100, 120, 230].forEach(function(width, index) { sheet.setColumnWidth(index + 1, width); });
+  sheet.getRange(3, 1, rows.length + 1, STADGRAD_HEADERS.length).createFilter();
+  ui.alert('Лист «СтадГрад (пробник)» создан. Данные доступны сайту после обновления развёртывания Web App.');
+}
+
 function getScheduleRows() {
   const sheet = getCalendarSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
   if (!sheet) return { rows: null };
@@ -458,6 +513,7 @@ function onOpen() {
     .addItem('Настроить проверку данных на текущем листе', 'applyValidationToActiveSheet')
     .addSeparator()
     .addItem('Создать лист «Олимпиады»', 'createOlympiadsSheet')
+    .addItem('Создать лист «СтадГрад (пробник)»', 'createStadgradSheet')
     .addItem('Создать лист расписания…', 'createScheduleSheetDialog')
     .addItem('Добавить уроки к расписанию…', 'addMoreLessonsDialog')
     .addItem('Настроить автозаполнение расписания по предмету…', 'setupScheduleAutofill')

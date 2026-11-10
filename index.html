@@ -18,7 +18,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=34">
 <!-- Шрифты подключены неблокирующе (preload + swap), чтобы медленная загрузка
      Google Fonts не задерживала выполнение скриптов ниже по странице. -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital@1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -80,6 +80,7 @@
       <button type="button" id="section-events-btn" class="view-switch__btn is-active" role="tab" aria-selected="true" data-section="events">Мероприятия<span class="update-dot" id="events-update-dot" hidden></span></button>
       <button type="button" id="section-schedule-btn" class="view-switch__btn" role="tab" aria-selected="false" data-section="schedule">Расписание<span class="update-dot" id="schedule-update-dot" hidden></span></button>
       <button type="button" id="section-olympiads-btn" class="view-switch__btn" role="tab" aria-selected="false" data-section="olympiads">Олимпиады</button>
+      <button type="button" id="section-stadgrad-btn" class="view-switch__btn" role="tab" aria-selected="false" data-section="stadgrad">СтадГрад (пробник)</button>
     </div>
 
     <div class="cal-nav" id="cal-nav">
@@ -97,6 +98,12 @@
       <button id="olympiads-prev" class="nav-btn" aria-label="Предыдущий месяц олимпиад">&#8592;</button>
       <h1 id="olympiads-title"></h1>
       <button id="olympiads-next" class="nav-btn" aria-label="Следующий месяц олимпиад">&#8594;</button>
+    </div>
+
+    <div class="cal-nav" id="stadgrad-nav" hidden>
+      <button id="stadgrad-prev" class="nav-btn" aria-label="Предыдущий месяц СтадГрад">&#8592;</button>
+      <h1 id="stadgrad-title"></h1>
+      <button id="stadgrad-next" class="nav-btn" aria-label="Следующий месяц СтадГрад">&#8594;</button>
     </div>
 
     <div class="cal-nav" id="schedule-nav" hidden>
@@ -138,6 +145,12 @@
     <p class="olympiads-note">Муниципальный этап ВсОШ · 9 класс · Время московское.<br>Источник: Приложение 2 к приказу ДОНМ от 07.10.2026 № Пр-806.</p>
   </section>
 
+  <section id="stadgrad-panel" aria-labelledby="stadgrad-title" hidden>
+    <div class="cal-panel cal-list" id="stadgrad-list"></div>
+    <p class="olympiads-note" id="stadgrad-status" role="status"></p>
+    <p class="olympiads-note">План диагностик на 2026–2027 уч. г. · ЗИЛАРТ548<br>Источник: предоставленный файл «СтадГрад.xlsx».</p>
+  </section>
+
   <footer class="cal-footer">
     <span class="cal-footer__dot"></span>
     Данные обновляются напрямую из Google Таблицы при каждом открытии
@@ -160,7 +173,8 @@
 </div>
 
 <script src="js/config.js?v=30"></script>
-<script src="js/olympiads-data.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/olympiads-data.js?v=34"></script>
+<script src="js/stadgrad-data.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
 </body>
 </html>

@@ -983,9 +983,22 @@ body::after {
 /* Олимпиады используют те же карточки и навигацию, что список календаря. */
 #section-switch { flex-wrap: wrap; }
 body[data-section="olympiads"] #cal-banner,
+body[data-section="stadgrad"] #cal-banner,
 .cal-footer[hidden] { display: none; }
 .olympiads-note { color: var(--ink-muted); font-size: 0.75rem; line-height: 1.6; margin: 16px 4px; }
 .olympiad-event { flex-wrap: wrap; cursor: default; --event-accent: #1aa6b7; }
 .olympiad-event:hover { transform: none; background: #fbfbfd; }
 .olympiad-event .list-event__kind { background: #1aa6b7; }
 .olympiad-event .list-event__title { flex-basis: 100%; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+
+/* Пробники: тот же список по датам, с деталями из всех столбцов листа. */
+.stadgrad-event { flex-wrap: wrap; cursor: default; --event-accent: #1aa6b7; }
+.stadgrad-event:hover { transform: none; background: #fbfbfd; }
+.stadgrad-event .list-event__kind { background: #1aa6b7; }
+.stadgrad-event .list-event__title { flex-basis: 100%; order: 0; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.stadgrad-event__work, .stadgrad-event__meta { flex-basis: 100%; font-size: 0.8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.stadgrad-event__meta { color: var(--ink-dark-muted); }
+@media (max-width: 600px) {
+  #section-switch:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  #section-switch .view-switch__btn { min-width: 0; padding: 8px 6px; }
+}

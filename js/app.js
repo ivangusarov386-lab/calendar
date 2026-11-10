@@ -982,6 +982,113 @@ async function loadOlympiads() {
   }
 }
 
+let stadgradRows = [];
+const stadgradMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+function renderStadgradRows(rows) {
+  stadgradRows = rows;
+  renderStadgradMonth();
+}
+
+function renderStadgradMonth() {
+  const year = stadgradMonth.getFullYear();
+  const month = stadgradMonth.getMonth();
+  const monthKey = Object.keys(MONTH_NUM).find((key) => MONTH_NUM[key] === month + 1);
+  document.getElementById('stadgrad-title').textContent = `${MONTH_TITLE[monthKey]} ${year}`;
+  const list = document.getElementById('stadgrad-list');
+  list.replaceChildren();
+  const byDay = new Map();
+  stadgradRows.forEach((row) => {
+    const match = String(row[1] || '').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!match || !String(row[2] || '').trim()) return;
+    const day = Number(match[1]);
+    const date = new Date(Number(match[3]), Number(match[2]) - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(row);
+  });
+  const now = new Date();
+  [...byDay.keys()].sort((a, b) => a - b).forEach((day) => {
+    const group = document.createElement('div');
+    group.className = 'list-day';
+    const header = document.createElement('div');
+    header.className = 'list-day__header';
+    const weekday = WEEKDAYS[(new Date(year, month, day).getDay() + 6) % 7];
+    header.textContent = `${weekday}, ${day} ${MONTH_GENITIVE[monthKey]}`;
+    if (year === now.getFullYear() && month === now.getMonth() && day === now.getDate()) {
+      group.classList.add('is-today');
+      const badge = document.createElement('span');
+      badge.className = 'list-day__badge';
+      badge.textContent = 'Сегодня';
+      header.appendChild(badge);
+    }
+    group.appendChild(header);
+    const events = document.createElement('div');
+    events.className = 'list-day__events';
+    byDay.get(day).forEach((row) => {
+      const event = document.createElement('div');
+      event.className = 'list-event stadgrad-event';
+      const addText = (className, text) => {
+        if (!text) return;
+        const span = document.createElement('span');
+        span.className = className;
+        span.textContent = text;
+        event.appendChild(span);
+      };
+      addText('list-event__kind', row[3] ? `${row[3]} класс` : 'Пробник');
+      addText('list-event__kind', row[5]);
+      addText('list-event__title', row[2]);
+      addText('stadgrad-event__work', row[4]);
+      addText('stadgrad-event__meta', row[6] ? `Группы: ${row[6]}` : '');
+      addText('stadgrad-event__meta', row[7]);
+      events.appendChild(event);
+    });
+    group.appendChild(events);
+    list.appendChild(group);
+  });
+  if (!byDay.size) {
+    const empty = document.createElement('p');
+    empty.className = 'list-empty';
+    empty.textContent = 'В этом месяце пока нет пробников.';
+    list.appendChild(empty);
+  }
+}
+
+let stadgradLoading = false;
+async function loadStadgrad() {
+  if (stadgradLoading) return;
+  const status = document.getElementById('stadgrad-status');
+  if (!isConfigured()) {
+    status.textContent = 'Показаны данные из Excel. Ссылка на Apps Script не настроена.';
+    return;
+  }
+  stadgradLoading = true;
+  status.textContent = 'Обновление из Google Таблицы…';
+  try {
+    const url = new URL(CALENDAR_CONFIG.webAppUrl);
+    url.searchParams.set('stadgrad', '1');
+    url.searchParams.set('_', Date.now());
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const json = await response.json();
+    if (json.error) throw new Error(json.error);
+    if (json.rows === null) {
+      renderStadgradRows([]);
+      status.textContent = 'Лист «СтадГрад (пробник)» ещё не создан в Google Таблице.';
+    } else {
+      if (!Array.isArray(json.rows) || !json.rows.every((row) => Array.isArray(row) && row.length === 8)) {
+        throw new Error('Invalid rows');
+      }
+      renderStadgradRows(json.rows);
+      status.textContent = json.rows.length ? 'Данные обновлены из Google Таблицы.' : 'В листе «СтадГрад (пробник)» пока нет работ.';
+    }
+  } catch (err) {
+    status.textContent = 'Не удалось обновить данные. Показана последняя загруженная версия (при первом открытии — из Excel).';
+  } finally {
+    stadgradLoading = false;
+  }
+}
+
 function switchSection(section) {
   state.section = section;
   document.body.dataset.section = section;
@@ -1007,10 +1114,16 @@ function switchSection(section) {
   olympiadsButton.setAttribute('aria-selected', String(section === 'olympiads'));
   document.getElementById('olympiads-panel').hidden = section !== 'olympiads';
   document.getElementById('olympiads-nav').hidden = section !== 'olympiads';
-  document.querySelector('.cal-footer').hidden = section === 'olympiads';
+  const stadgradButton = document.getElementById('section-stadgrad-btn');
+  stadgradButton.classList.toggle('is-active', section === 'stadgrad');
+  stadgradButton.setAttribute('aria-selected', String(section === 'stadgrad'));
+  document.getElementById('stadgrad-panel').hidden = section !== 'stadgrad';
+  document.getElementById('stadgrad-nav').hidden = section !== 'stadgrad';
+  document.querySelector('.cal-footer').hidden = section === 'olympiads' || section === 'stadgrad';
   els.banner.hidden = true;
 
   if (section === 'olympiads') { renderOlympiadsMonth(); loadOlympiads(); }
+  if (section === 'stadgrad') { renderStadgradMonth(); loadStadgrad(); }
   if (section === 'schedule') {
     acknowledgeScheduleSeen();
     loadSchedule();
@@ -1452,7 +1565,15 @@ function init() {
 
   let savedSection = 'events';
   try { savedSection = localStorage.getItem('calendarSection') || 'events'; } catch (err) { /* приватный режим — не критично */ }
-  state.section = ['schedule', 'olympiads'].includes(savedSection) ? savedSection : 'events';
+  state.section = ['schedule', 'olympiads', 'stadgrad'].includes(savedSection) ? savedSection : 'events';
+  renderStadgradRows(STADGRAD_ROWS);
+  [['stadgrad-prev', -1], ['stadgrad-next', 1]].forEach(([id, step]) => {
+    document.getElementById(id).addEventListener('click', () => {
+      stadgradMonth.setMonth(stadgradMonth.getMonth() + step);
+      renderStadgradMonth();
+    });
+  });
+  document.getElementById('section-stadgrad-btn').addEventListener('click', () => switchSection('stadgrad'));
   renderOlympiadsRows(OLYMPIADS_ROWS);
   [['olympiads-prev', -1], ['olympiads-next', 1]].forEach(([id, step]) => {
     document.getElementById(id).addEventListener('click', () => {
@@ -1517,6 +1638,7 @@ function init() {
   function refreshCurrentSection() {
     if (state.section === 'events') loadAndRender();
     else if (state.section === 'olympiads') loadOlympiads();
+    else if (state.section === 'stadgrad') loadStadgrad();
     else loadSchedule();
     loadVacations();
     loadSubstitutions();
